@@ -19,6 +19,12 @@
       manifest: fetchJson("manifest.json"),
       grids: fetchJson("grids.json"),
       metrics_ride: fetchJson("metrics_ride.json"),
+      metrics_chg: fetchJson("metrics_chg.json").catch(function () {
+        return { rows: [], count: 0 };
+      }),
+      entities_charger: fetchJson("entities_charger.json").catch(function () {
+        return { entities: [], brand: "小李充电" };
+      }),
       weather: fetchJson("weather_coeff.json"),
       calendar: fetchJson("calendar.json"),
       anchors: fetchJson("anchors_shanghai.json"),

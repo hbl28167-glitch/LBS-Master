@@ -26,8 +26,8 @@
         <button type="button" disabled title="WS-E/占位">到店增长</button>
         <button type="button" id="nav-ride">出行</button>
         <button type="button" disabled title="Could">履约</button>
-        <button type="button" disabled title="WS-E">能源网络</button>
-        <button type="button" disabled title="WS-E">数据治理</button>
+        <button type="button" id="nav-energy">能源网络</button>
+        <button type="button" id="nav-gov">数据治理</button>
       </nav>
       <span class="badge-scene" id="scene-badge">scene <code>overview</code></span>
       <span class="synth-tag" id="synth-note">Synthetic</span>
@@ -92,6 +92,33 @@
             </div>
             <div class="legend">填色优先 gap；demand/supply 同屏契约 · 无 supply 则禁用 gap</div>
           </div>
+          <div class="card" id="energy-layers" style="display:none">
+            <strong>能源网络 · 经营色</strong>
+            <div class="row">
+              <label><input type="checkbox" id="layer-chg-gap" checked /> chg 缺口</label>
+              <label><input type="checkbox" id="layer-chargers" checked /> 小李充电</label>
+              <label><input type="checkbox" id="layer-roads-e" /> 路网</label>
+            </div>
+            <div class="legend">
+              <span><i class="swatch" style="background:#ef4444"></i>缺口高</span>
+              <span><i class="swatch" style="background:#22c55e"></i>小李充电点</span>
+            </div>
+            <div class="legend muted">scene=chg · Synthetic · 无雇主站名</div>
+          </div>
+          <div class="card" id="gov-layers" style="display:none">
+            <strong>数据质量</strong>
+            <div class="row">
+              <label><input type="checkbox" id="layer-quality" checked /> 问题点</label>
+              <label><input type="checkbox" id="layer-chargers-g" checked /> 小李充电</label>
+              <label><input type="checkbox" id="layer-roads-g" /> 路网</label>
+            </div>
+            <div class="legend legend-title">图例 · 数据质量（≠ 经营色）</div>
+            <div class="legend">
+              <span><i class="swatch" style="background:#a855f7"></i>P0 主数据</span>
+              <span><i class="swatch" style="background:#f59e0b"></i>P1 入口/路网</span>
+            </div>
+            <div class="gov-boundary">不处理终端 GPS 漂移 · 仅主数据/入口类问题</div>
+          </div>
         </div>
         <div id="map" role="application" aria-label="地图"></div>
       </div>
@@ -108,6 +135,7 @@
             <h3>详情</h3>
             <p>点选网格查看 demand × supply 与路网说明。</p>
           </div>
+          <div id="siting-panel" class="siting-panel" style="display:none" hidden></div>
         </div>
       </aside>
     </div>

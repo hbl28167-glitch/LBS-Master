@@ -58,6 +58,9 @@
     }
 
     const gridLayer = L.layerGroup().addTo(map);
+    const entityLayer = L.layerGroup().addTo(map);
+    const qualityLayer = L.layerGroup().addTo(map);
+    const sitingLayer = L.layerGroup().addTo(map);
     const roadsLayer = L.layerGroup();
     let roadsAdded = false;
     let roadsLoaded = false;
@@ -216,6 +219,97 @@
       });
     }
 
+    function clearEntities() {
+      entityLayer.clearLayers();
+    }
+
+    function clearQuality() {
+      qualityLayer.clearLayers();
+    }
+
+    function clearSiting() {
+      sitingLayer.clearLayers();
+    }
+
+    /** chargers: [{lng,lat,name,brand,...}] brand display 小李充电 only */
+    function renderChargers(list, opts) {
+      clearEntities();
+      const o = opts || {};
+      if (o.visible === false) return;
+      const arr = list || [];
+      const maxN = o.max != null ? o.max : 200;
+      const step = arr.length > maxN ? Math.ceil(arr.length / maxN) : 1;
+      for (let i = 0; i < arr.length; i += step) {
+        const e = arr[i];
+        if (e.lat == null || e.lng == null) continue;
+        const name = e.name || e.display_name || "小李充电";
+        const m = L.circleMarker([e.lat, e.lng], {
+          radius: 5,
+          color: "#14532d",
+          weight: 1,
+          fillColor: o.color || "#22c55e",
+          fillOpacity: 0.9
+        });
+        m.bindTooltip(name + (e.stalls != null ? " · " + e.stalls + "桩" : ""), {
+          sticky: true
+        });
+        entityLayer.addLayer(m);
+      }
+    }
+
+    /** issues: quality markers — purple/amber, legend 数据质量 */
+    function renderQualityIssues(issues, opts) {
+      clearQuality();
+      const o = opts || {};
+      if (o.visible === false) return;
+      (issues || []).forEach(function (iss) {
+        if (iss.lat == null || iss.lng == null) return;
+        const col =
+          iss.severity === "P0" ? "#a855f7" : iss.severity === "P1" ? "#f59e0b" : "#94a3b8";
+        const m = L.circleMarker([iss.lat, iss.lng], {
+          radius: iss.severity === "P0" ? 8 : 6,
+          color: "#1e1b4b",
+          weight: 1.5,
+          fillColor: col,
+          fillOpacity: 0.92
+        });
+        m.bindTooltip(
+          "[" +
+            iss.severity +
+            "] " +
+            (iss.display_name || "") +
+            "<br/>" +
+            (iss.title || iss.code),
+          { sticky: true }
+        );
+        qualityLayer.addLayer(m);
+      });
+    }
+
+    /** siting candidates A/B markers */
+    function renderSitingCandidates(cands, opts) {
+      clearSiting();
+      const o = opts || {};
+      if (o.visible === false) return;
+      (cands || []).forEach(function (c, idx) {
+        if (c.lat == null || c.lng == null) return;
+        const isWin = o.winner && c.cand_id === o.winner;
+        const m = L.circleMarker([c.lat, c.lng], {
+          radius: isWin ? 10 : 8,
+          color: isWin ? "#fbbf24" : "#e2e8f0",
+          weight: 2,
+          fillColor: idx === 0 ? "#3b82f6" : "#06b6d4",
+          fillOpacity: 0.95
+        });
+        m.bindTooltip(
+          (c.label || c.cand_id) +
+            (c.total != null ? "<br/>分 " + c.total : ""),
+          { sticky: true }
+        );
+        sitingLayer.addLayer(m);
+      });
+    }
+
     return {
       map: map,
       basemapOk: basemapOk,
@@ -229,7 +323,13 @@
       },
       fitToBbox: fitToBbox,
       focusGrid: focusGrid,
-      clearGrids: clearGrids
+      clearGrids: clearGrids,
+      renderChargers: renderChargers,
+      clearEntities: clearEntities,
+      renderQualityIssues: renderQualityIssues,
+      clearQuality: clearQuality,
+      renderSitingCandidates: renderSitingCandidates,
+      clearSiting: clearSiting
     };
   }
 

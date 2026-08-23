@@ -14,7 +14,9 @@
     layer_set: ["gap"],
     snapshot_id: null,
     pack: "overview",
-    ov_metric: "ride_gap"
+    ov_metric: "ride_gap",
+    siting_open: false,
+    siting_grid_id: null
   };
 
   const listeners = new Set();
@@ -36,7 +38,9 @@
       layer_set: s.layer_set.slice(),
       snapshot_id: s.snapshot_id,
       pack: s.pack,
-      ov_metric: s.ov_metric
+      ov_metric: s.ov_metric,
+      siting_open: !!s.siting_open,
+      siting_grid_id: s.siting_grid_id || null
     };
   }
 
@@ -89,6 +93,12 @@
     } else if (pack === "overview") {
       active_scene = "overview";
       layer_set = ["gap"];
+    } else if (pack === "energy") {
+      active_scene = "chg";
+      layer_set = ["gap", "chargers"];
+    } else if (pack === "gov") {
+      active_scene = "gov";
+      layer_set = ["quality", "chargers"];
     } else {
       active_scene = pack;
       layer_set = state.layer_set.slice();
@@ -99,7 +109,9 @@
       layer_set: layer_set,
       // inherit: region, time_of_day, season_or_node, weather, scenario, selected_*
       selected_grid_id: state.selected_grid_id,
-      selected_entity: state.selected_entity
+      selected_entity: state.selected_entity,
+      siting_open: pack === "energy" ? state.siting_open : false,
+      siting_grid_id: pack === "energy" ? state.siting_grid_id : null
     });
     notify(prev);
     return get();
