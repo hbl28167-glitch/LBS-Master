@@ -2,7 +2,7 @@
 
 - 仓绝对路径：`C:\Users\hongbol\Documents\LBS-Master`（可换机；源码相对路径）
 - branch：`master`
-- commit：见 `git log -1` — `feat(app): energy siting and light governance`
+- commit：`92081c9` — `feat(app): energy siting and light governance`
 - 依赖：WS-D 主路径 + WS-C `metrics_chg` / `entities_charger`
 
 ## How to run
