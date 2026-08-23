@@ -7,8 +7,16 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node --test tests/portable-paths.test.js",
+    "test": "node --test tests/portable-paths.test.js tests/gcj.test.js",
     "verify:paths": "node tests/portable-paths.test.js",
-    "build": "node -e \"console.log('build: placeholder (WS-B/C will implement)')\""
+    "build:anchors": "node scripts/build-anchors.js",
+    "build:grids": "node scripts/build-grids.js",
+    "build:landuse": "node scripts/build-landuse.js",
+    "download:osm": "node scripts/download-osm-roads.js",
+    "build:roads": "node scripts/build-roads.js",
+    "build:geo": "node scripts/build-all.js",
+    "verify:alignment": "node scripts/verify-alignment.js",
+    "build:manifest": "node scripts/build-manifest.js",
+    "build": "node scripts/build-all.js"
   }
 }

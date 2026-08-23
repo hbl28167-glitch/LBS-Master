@@ -3,6 +3,7 @@ public/config.local.js
 data/raw/**
 !data/raw/**/
 !data/raw/**/.gitkeep
+data/raw/osm/_tiles_progress.json
 node_modules/
 *.log
 .DS_Store

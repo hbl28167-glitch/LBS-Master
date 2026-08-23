@@ -1,0 +1,23 @@
+{
+  "version": "0.1.0",
+  "bbox_gcj": [
+    120.854161,
+    30.66753,
+    122.20433,
+    31.8781
+  ],
+  "built_at": "2026-08-23T09:52:32.379Z",
+  "osm_attribution": "© OpenStreetMap contributors",
+  "synthetic": true,
+  "grid_id_rule": "sh:{cell_m}:{row}:{col}",
+  "cell_m": 1000,
+  "grid_count": 17280,
+  "road_features": 34738,
+  "roads_source": "local_overpass_json",
+  "artifacts": {
+    "grids": "data/processed/grids.json",
+    "roads_gcj": "data/processed/roads_gcj.geojson",
+    "anchors": "data/static/anchors_shanghai.json",
+    "alignment_sample": "docs/alignment-sample.md"
+  }
+}

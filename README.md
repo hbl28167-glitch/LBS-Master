@@ -12,7 +12,7 @@ Portable LBS mid-platform sandbox (Shanghai domain). Static map shell + Node bui
 4. Copy `.env.example` → `.env` and set `AMAP_KEY=` (Amap/Gaode open platform key; self-provided).
 5. Copy `public/config.local.example.js` → `public/config.local.js` and set `amapKey`.
 6. `npm test` — must pass (includes portable path check).
-7. `npm run build` — data pipeline (placeholder until WS-B/C).
+7. `npm run build` — geo pipeline (anchors → grids → landuse → roads GCJ → alignment → manifest). Optional: `npm run download:osm` first if no local raw.
 8. Open `public/index.html` via a static server, or serve `public/` (e.g. `npx --yes serve public`).
 9. Confirm no hard-coded machine paths; keys only in gitignored local files.
 10. For map tiles you need a valid Amap key; without it the shell should degrade, not crash.
@@ -23,7 +23,9 @@ Portable LBS mid-platform sandbox (Shanghai domain). Static map shell + Node bui
 |---------|---------|
 | `npm test` | Run tests (portable paths, later unit tests) |
 | `npm run verify:paths` | Scan `scripts/` + `public/` for absolute drive paths |
-| `npm run build` | Build processed data (implemented in later workstreams) |
+| `npm run build` / `build:geo` | WS-B geo pipeline → `data/processed/*` |
+| `npm run download:osm` | Tiled Overpass → `data/raw/osm/` (gitignored) |
+| `npm run verify:alignment` | Rewrite `docs/alignment-sample.md` |
 
 ## Layout
 

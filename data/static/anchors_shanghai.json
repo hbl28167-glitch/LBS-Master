@@ -1,0 +1,236 @@
+{
+  "crs": "GCJ-02",
+  "source": "public place names; WGS approx → scripts/lib/gcj.js wgs84ToGcj02",
+  "anchors": [
+    {
+      "id": "lujiazui",
+      "name": "陆家嘴",
+      "lng": 121.504233,
+      "lat": 31.237686,
+      "landuse": "office",
+      "labels": [
+        "cbd",
+        "finance"
+      ],
+      "wgs84": {
+        "lng": 121.4998,
+        "lat": 31.2397
+      }
+    },
+    {
+      "id": "peoples_square",
+      "name": "人民广场",
+      "lng": 121.478223,
+      "lat": 31.228458,
+      "landuse": "hub",
+      "labels": [
+        "metro_hub",
+        "civic"
+      ],
+      "wgs84": {
+        "lng": 121.4737,
+        "lat": 31.2304
+      }
+    },
+    {
+      "id": "hongqiao_hub",
+      "name": "虹桥枢纽",
+      "lng": 121.31951,
+      "lat": 31.192031,
+      "landuse": "hub",
+      "labels": [
+        "airport",
+        "rail"
+      ],
+      "wgs84": {
+        "lng": 121.315,
+        "lat": 31.194
+      }
+    },
+    {
+      "id": "pudong_airport",
+      "name": "浦东国际机场",
+      "lng": 121.803304,
+      "lat": 31.1409,
+      "landuse": "hub",
+      "labels": [
+        "airport"
+      ],
+      "wgs84": {
+        "lng": 121.799,
+        "lat": 31.143
+      }
+    },
+    {
+      "id": "xujiahui",
+      "name": "徐家汇",
+      "lng": 121.440617,
+      "lat": 31.186119,
+      "landuse": "retail",
+      "labels": [
+        "mall",
+        "office_mix"
+      ],
+      "wgs84": {
+        "lng": 121.436,
+        "lat": 31.188
+      }
+    },
+    {
+      "id": "jing_an_temple",
+      "name": "静安寺",
+      "lng": 121.450101,
+      "lat": 31.22162,
+      "landuse": "retail",
+      "labels": [
+        "commercial"
+      ],
+      "wgs84": {
+        "lng": 121.4455,
+        "lat": 31.2235
+      }
+    },
+    {
+      "id": "wujiaochang",
+      "name": "五角场",
+      "lng": 121.518387,
+      "lat": 31.295968,
+      "landuse": "retail",
+      "labels": [
+        "university_area"
+      ],
+      "wgs84": {
+        "lng": 121.514,
+        "lat": 31.298
+      }
+    },
+    {
+      "id": "zhangjiang",
+      "name": "张江高科技园区",
+      "lng": 121.605199,
+      "lat": 31.200785,
+      "landuse": "industrial_park",
+      "labels": [
+        "tech_park"
+      ],
+      "wgs84": {
+        "lng": 121.601,
+        "lat": 31.203
+      }
+    },
+    {
+      "id": "anting",
+      "name": "安亭汽车城",
+      "lng": 121.164553,
+      "lat": 31.29112,
+      "landuse": "industrial_park",
+      "labels": [
+        "auto"
+      ],
+      "wgs84": {
+        "lng": 121.16,
+        "lat": 31.293
+      }
+    },
+    {
+      "id": "dishui_lake",
+      "name": "滴水湖（临港）",
+      "lng": 121.929085,
+      "lat": 30.902633,
+      "landuse": "scenic",
+      "labels": [
+        "lingang",
+        "lake"
+      ],
+      "wgs84": {
+        "lng": 121.925,
+        "lat": 30.905
+      }
+    },
+    {
+      "id": "lingang_new_city",
+      "name": "临港新片区主城区",
+      "lng": 121.912078,
+      "lat": 30.890615,
+      "landuse": "mixed",
+      "labels": [
+        "lingang",
+        "new_town"
+      ],
+      "wgs84": {
+        "lng": 121.908,
+        "lat": 30.893
+      }
+    },
+    {
+      "id": "nanjing_east_road",
+      "name": "南京东路",
+      "lng": 121.488489,
+      "lat": 31.234031,
+      "landuse": "retail",
+      "labels": [
+        "pedestrian_street"
+      ],
+      "wgs84": {
+        "lng": 121.484,
+        "lat": 31.236
+      }
+    },
+    {
+      "id": "zhongshan_park",
+      "name": "中山公园",
+      "lng": 121.421645,
+      "lat": 31.218155,
+      "landuse": "mixed",
+      "labels": [
+        "residential_mix"
+      ],
+      "wgs84": {
+        "lng": 121.417,
+        "lat": 31.22
+      }
+    },
+    {
+      "id": "century_park",
+      "name": "世纪公园",
+      "lng": 121.559255,
+      "lat": 31.215832,
+      "landuse": "scenic",
+      "labels": [
+        "park"
+      ],
+      "wgs84": {
+        "lng": 121.555,
+        "lat": 31.218
+      }
+    },
+    {
+      "id": "songjiang_university",
+      "name": "松江大学城",
+      "lng": 121.217434,
+      "lat": 31.047906,
+      "landuse": "mixed",
+      "labels": [
+        "education"
+      ],
+      "wgs84": {
+        "lng": 121.213,
+        "lat": 31.05
+      }
+    },
+    {
+      "id": "baoshan_steel",
+      "name": "宝山工业带",
+      "lng": 121.491493,
+      "lat": 31.401084,
+      "landuse": "industrial_park",
+      "labels": [
+        "industry"
+      ],
+      "wgs84": {
+        "lng": 121.487,
+        "lat": 31.403
+      }
+    }
+  ]
+}
