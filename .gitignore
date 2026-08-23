@@ -1,6 +1,7 @@
 .env
 public/config.local.js
 data/raw/**
+!data/raw/**/
 !data/raw/**/.gitkeep
 node_modules/
 *.log
