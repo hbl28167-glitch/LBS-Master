@@ -1,7 +1,7 @@
 # HANDOFF WS-A
 
 - 仓绝对路径：`C:\Users\hongbol\Documents\LBS-Master`
-- 当前 branch / commit：`master` / `e2e740e5af742a1b3ed7a0892ae9b3c7d90862ce`
+- 当前 branch / commit：`master` / `5463669cc2ae65f73d7ca7ab9032cf63a0f2c5a1`
 - 如何跑 test：
   1. `cd` 到仓根（任意盘符/用户目录均可）
   2. Node 18+
