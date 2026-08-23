@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lbs-master.local/contracts/payload.schema.json",
+  "title": "LBS-Master build manifest / payload header",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "version",
+    "bbox_gcj",
+    "built_at",
+    "osm_attribution",
+    "synthetic"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "e.g. 0.1.0"
+    },
+    "bbox_gcj": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": { "type": "number" },
+      "description": "[minLng, minLat, maxLng, maxLat] in GCJ-02"
+    },
+    "built_at": {
+      "type": "string",
+      "description": "ISO8601 timestamp"
+    },
+    "osm_attribution": {
+      "type": "string",
+      "const": "© OpenStreetMap contributors"
+    },
+    "synthetic": {
+      "type": "boolean",
+      "description": "true when business metrics/entities are synthetic"
+    }
+  }
+}

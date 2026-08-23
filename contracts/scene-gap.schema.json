@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lbs-master.local/contracts/scene-gap.schema.json",
+  "title": "LBS-Master scene gap metrics row",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "grid_id",
+    "scene",
+    "time_of_day",
+    "demand_base",
+    "supply_base"
+  ],
+  "properties": {
+    "grid_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scene": {
+      "type": "string",
+      "enum": ["ride", "chg"]
+    },
+    "time_of_day": {
+      "type": "string",
+      "minLength": 1
+    },
+    "demand_base": {
+      "type": "number"
+    },
+    "supply_base": {
+      "type": "number"
+    }
+  },
+  "description": "Runtime: demand = demand_base * weather_coeff * node_coeff; gap = norm(demand) - norm(supply). Coefficients from data/static."
+}

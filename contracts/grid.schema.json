@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lbs-master.local/contracts/grid.schema.json",
+  "title": "LBS-Master grid cell",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "grid_id",
+    "cell_lng",
+    "cell_lat",
+    "landuse",
+    "is_valid",
+    "labels"
+  ],
+  "properties": {
+    "grid_id": {
+      "type": "string",
+      "description": "Stable id, e.g. sh:r:c",
+      "minLength": 1
+    },
+    "cell_lng": {
+      "type": "number",
+      "description": "Cell center longitude (GCJ-02)"
+    },
+    "cell_lat": {
+      "type": "number",
+      "description": "Cell center latitude (GCJ-02)"
+    },
+    "landuse": {
+      "type": "string",
+      "enum": [
+        "office",
+        "residential",
+        "retail",
+        "industrial_park",
+        "hub",
+        "scenic",
+        "mixed",
+        "other"
+      ]
+    },
+    "is_valid": {
+      "type": "boolean"
+    },
+    "labels": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
