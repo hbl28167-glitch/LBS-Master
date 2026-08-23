@@ -2,7 +2,7 @@
 
 - 仓绝对路径：`C:\Users\hongbol\Documents\LBS-Master`
 - branch：`master`
-- commit：见 `git rev-parse HEAD`（本文件随 `feat(data): shanghai roads gcj grids landuse` 提交）
+- commit：`f5e46df` — `feat(data): shanghai roads gcj grids landuse`
 - 依赖：WS-A 完成（contracts + HANDOFF-A）
 
 ## grid_id 规则（冻结）
