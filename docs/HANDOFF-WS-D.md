@@ -2,7 +2,7 @@
 
 - 仓绝对路径：`C:\Users\hongbol\Documents\LBS-Master`（可换机；源码相对路径）
 - branch：`master`
-- commit：见 `git log -1`（信息 `feat(app): overview and ride main path`）
+- commit：`aaa830a` — `feat(app): overview and ride main path`
 - 依赖：WS-A/B/C（contracts + processed metrics/grids/roads）
 
 ## How to run
