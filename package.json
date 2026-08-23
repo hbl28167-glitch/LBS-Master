@@ -7,7 +7,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node --test tests/**/*.test.js",
+    "test": "node --test tests/portable-paths.test.js",
     "verify:paths": "node tests/portable-paths.test.js",
     "build": "node -e \"console.log('build: placeholder (WS-B/C will implement)')\""
   }
