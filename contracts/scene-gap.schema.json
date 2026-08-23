@@ -25,11 +25,13 @@
       "minLength": 1
     },
     "demand_base": {
-      "type": "number"
+      "type": "number",
+      "description": "Synthetic index on 0–100 scale (already normalized)."
     },
     "supply_base": {
-      "type": "number"
+      "type": "number",
+      "description": "Synthetic index on 0–100 scale (already normalized)."
     }
   },
-  "description": "Runtime: demand = demand_base * weather_coeff * node_coeff; gap = norm(demand) - norm(supply). Coefficients from data/static."
+  "description": "Runtime: demand = demand_base * weather_coeff[weather].demand_{scene} * node_coeff; supply = supply_base * weather_coeff[weather].supply_{scene} * node_coeff. norm is identity on 0–100 indices, so gap = demand - supply (higher = worse shortage). Coefficients from data/static/weather_coeff.json and calendar.json. All metrics are Synthetic."
 }

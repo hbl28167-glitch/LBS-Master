@@ -23,6 +23,9 @@ function main() {
   const gridsPath = root("data", "processed", "grids.json");
   const roadsPath = root("data", "processed", "roads_gcj.geojson");
   const roadsMetaPath = root("data", "processed", "roads_meta.json");
+  const ridePath = root("data", "processed", "metrics_ride.json");
+  const chgPath = root("data", "processed", "metrics_chg.json");
+  const chgEntPath = root("data", "processed", "entities_charger.json");
 
   let grid_count = 0;
   let cell_m = null;
@@ -44,22 +47,47 @@ function main() {
     roads_source = JSON.parse(fs.readFileSync(roadsMetaPath, "utf8")).source;
   }
 
+  function rowCount(p) {
+    if (!fs.existsSync(p)) return null;
+    const d = JSON.parse(fs.readFileSync(p, "utf8"));
+    return d.count != null
+      ? d.count
+      : (d.rows && d.rows.length) ||
+          (d.entities && d.entities.length) ||
+          null;
+  }
+
+  const metrics_ride_count = rowCount(ridePath);
+  const metrics_chg_count = rowCount(chgPath);
+  const entities_charger_count = rowCount(chgEntPath);
+
   const manifest = {
     version: "0.1.0",
     bbox_gcj,
     built_at: new Date().toISOString(),
     osm_attribution: "© OpenStreetMap contributors",
     synthetic: true,
+    synthetic_note:
+      "All ride/chg metrics and 小李 charger entities are Synthetic; not real ops data.",
     grid_id_rule,
     cell_m,
     grid_count,
     road_features,
     roads_source,
+    metrics_ride_count,
+    metrics_chg_count,
+    entities_charger_count,
     artifacts: {
       grids: "data/processed/grids.json",
       roads_gcj: "data/processed/roads_gcj.geojson",
       anchors: "data/static/anchors_shanghai.json",
-      alignment_sample: "docs/alignment-sample.md"
+      weather_coeff: "data/static/weather_coeff.json",
+      calendar: "data/static/calendar.json",
+      metrics_ride: "data/processed/metrics_ride.json",
+      metrics_chg: "data/processed/metrics_chg.json",
+      entities_charger: "data/processed/entities_charger.json",
+      alignment_sample: "docs/alignment-sample.md",
+      synthetic_rules: "docs/synthetic-rules.md"
     }
   };
 

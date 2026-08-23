@@ -6,18 +6,28 @@
     122.20433,
     31.8781
   ],
-  "built_at": "2026-08-23T09:52:32.379Z",
+  "built_at": "2026-08-23T09:59:44.190Z",
   "osm_attribution": "© OpenStreetMap contributors",
   "synthetic": true,
+  "synthetic_note": "All ride/chg metrics and 小李 charger entities are Synthetic; not real ops data.",
   "grid_id_rule": "sh:{cell_m}:{row}:{col}",
   "cell_m": 1000,
   "grid_count": 17280,
   "road_features": 34738,
   "roads_source": "local_overpass_json",
+  "metrics_ride_count": 51840,
+  "metrics_chg_count": 3708,
+  "entities_charger_count": 106,
   "artifacts": {
     "grids": "data/processed/grids.json",
     "roads_gcj": "data/processed/roads_gcj.geojson",
     "anchors": "data/static/anchors_shanghai.json",
-    "alignment_sample": "docs/alignment-sample.md"
+    "weather_coeff": "data/static/weather_coeff.json",
+    "calendar": "data/static/calendar.json",
+    "metrics_ride": "data/processed/metrics_ride.json",
+    "metrics_chg": "data/processed/metrics_chg.json",
+    "entities_charger": "data/processed/entities_charger.json",
+    "alignment_sample": "docs/alignment-sample.md",
+    "synthetic_rules": "docs/synthetic-rules.md"
   }
 }

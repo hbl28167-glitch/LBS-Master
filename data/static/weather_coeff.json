@@ -1,0 +1,29 @@
+{
+  "version": "0.1.0",
+  "synthetic": true,
+  "description": "Sandbox weather multipliers for scene A/B. Not real meteorology. Keys used at runtime by WS-D.",
+  "formula_note": "demand = demand_base * demand_ride * node_coeff; supply = supply_base * supply_ride * node_coeff",
+  "coeffs": {
+    "clear": {
+      "demand_ride": 1.0,
+      "supply_ride": 1.0,
+      "demand_chg": 1.0,
+      "supply_chg": 1.0,
+      "note": "baseline fair weather"
+    },
+    "rain": {
+      "demand_ride": 1.18,
+      "supply_ride": 0.82,
+      "demand_chg": 1.05,
+      "supply_chg": 0.95,
+      "note": "ride demand up, effective fleet down (speed/accept); chg mild"
+    },
+    "extreme": {
+      "demand_ride": 0.72,
+      "supply_ride": 0.55,
+      "demand_chg": 0.8,
+      "supply_chg": 0.7,
+      "note": "suppressed travel + contracted supply; drill only, not siting baseline"
+    }
+  }
+}

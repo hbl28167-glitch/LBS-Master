@@ -1,5 +1,5 @@
 /**
- * WS-B geo pipeline (+ placeholder hook for WS-C synthetic later).
+ * Full pipeline: WS-B geo → WS-C synthetic → manifest.
  */
 const { spawnSync } = require("child_process");
 const path = require("path");
@@ -42,6 +42,8 @@ run("scripts/build-landuse.js");
 }
 run("scripts/build-roads.js");
 run("scripts/verify-alignment.js");
+run("scripts/build-synthetic.js");
+run("scripts/verify-synthetic.js");
 run("scripts/build-manifest.js");
 
-console.log("\nbuild-all (geo): done");
+console.log("\nbuild-all (geo + synthetic): done");

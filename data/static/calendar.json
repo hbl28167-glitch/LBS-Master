@@ -1,0 +1,28 @@
+{
+  "version": "0.1.0",
+  "synthetic": true,
+  "description": "Season/node multipliers (node_coeff). Applied after weather at runtime.",
+  "default_node": "baseline",
+  "nodes": {
+    "baseline": {
+      "label": "日常工作日模板",
+      "node_coeff_ride": 1.0,
+      "node_coeff_chg": 1.0,
+      "demand_bias": {},
+      "note": "no calendar pulse"
+    },
+    "national_day": {
+      "label": "国庆节点",
+      "node_coeff_ride": 1.12,
+      "node_coeff_chg": 1.08,
+      "demand_bias": {
+        "hub": 1.25,
+        "scenic": 1.35,
+        "retail": 1.2,
+        "office": 0.75,
+        "residential": 0.95
+      },
+      "note": "hub/scenic/retail up; office commute down — do not use weekday model"
+    }
+  }
+}
