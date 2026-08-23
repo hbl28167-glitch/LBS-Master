@@ -45,5 +45,6 @@ run("scripts/verify-alignment.js");
 run("scripts/build-synthetic.js");
 run("scripts/verify-synthetic.js");
 run("scripts/build-manifest.js");
+run("scripts/copy-public-data.js");
 
-console.log("\nbuild-all (geo + synthetic): done");
+console.log("\nbuild-all (geo + synthetic + public/data): done");

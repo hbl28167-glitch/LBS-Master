@@ -19,6 +19,8 @@
     "build:geo": "node scripts/build-all.js",
     "verify:alignment": "node scripts/verify-alignment.js",
     "build:manifest": "node scripts/build-manifest.js",
-    "build": "node scripts/build-all.js"
+    "copy:public-data": "node scripts/copy-public-data.js",
+    "build": "node scripts/build-all.js",
+    "serve": "npx --yes serve public -p 4173"
   }
 }

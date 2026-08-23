@@ -1,0 +1,32 @@
+{
+  "version": "0.1.0",
+  "synthetic": true,
+  "description": "Narrative copy for road/corridor explanation (WS-D side panel). Not real traffic.",
+  "rules": [
+    {
+      "id": "lingang",
+      "match_labels": ["lingang", "lingang_belt", "dishui"],
+      "title": "临港方向 · 长距离匹配",
+      "body": "临港片区与中心城空间跨度大。账上运力若集中在内环/中环，晚高峰缺口会被「距离+回程空驶」放大——看起来有车，却够不着订单。路网层用于解释可达与走廊，而非装饰热力。"
+    },
+    {
+      "id": "cross_river",
+      "match_labels": ["lujiazui", "cbd", "finance", "bund"],
+      "match_landuse": ["office", "hub"],
+      "title": "过江走廊 · 阻隔与错配",
+      "body": "黄浦江两岸通勤在高峰形成单向潮汐。过江通道容量与接驳时效会让供给侧「有效运力」低于账面车辆数。对照 demand×supply 时，应用路网解释为何 gap 集中在商务区一侧。"
+    },
+    {
+      "id": "hub",
+      "match_labels": ["airport", "rail", "metro_hub"],
+      "match_landuse": ["hub"],
+      "title": "枢纽脉冲 · 到发不对称",
+      "body": "机场/铁路枢纽需求脉冲强、停留短。运力若按均质网格投放，容易在到发波次出现结构性短缺。优先 shift_fleet 而非单纯刺激需求。"
+    },
+    {
+      "id": "default",
+      "title": "路网解释槽",
+      "body": "打开路网层，结合主干/次干走向阅读缺口：缺口高且路网稀疏或远离走廊时，优先讨论调度与覆盖；紧邻主干仍缺车时，更像时段运力错配。"
+    }
+  ]
+}

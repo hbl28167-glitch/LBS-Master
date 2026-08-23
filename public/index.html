@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LBS-Master · 上海域中台沙盘</title>
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+  <link rel="stylesheet" href="css/app.css" />
+  <script>
+    // CDN fallback if local leaflet CSS 404
+    (function () {
+      var ok = false;
+      try {
+        var sheets = document.styleSheets;
+        /* local path attempted above */
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">LBS-Master <span>上海域 · 可移植沙盘</span></div>
+      <nav class="nav" aria-label="业务包">
+        <button type="button" id="nav-overview" class="active">区域总览</button>
+        <button type="button" disabled title="WS-E/占位">到店增长</button>
+        <button type="button" id="nav-ride">出行</button>
+        <button type="button" disabled title="Could">履约</button>
+        <button type="button" disabled title="WS-E">能源网络</button>
+        <button type="button" disabled title="WS-E">数据治理</button>
+      </nav>
+      <span class="badge-scene" id="scene-badge">scene <code>overview</code></span>
+      <span class="synth-tag" id="synth-note">Synthetic</span>
+    </header>
+
+    <div class="global-controls">
+      <label>区域
+        <select disabled title="MVP 固定上海">
+          <option selected>上海（含临港）</option>
+        </select>
+      </label>
+      <label>日内
+        <select id="sel-tod">
+          <option value="wd_am_peak">工作日早高峰</option>
+          <option value="wd_pm_peak" selected>工作日晚高峰</option>
+          <option value="we_aft">周末下午</option>
+        </select>
+      </label>
+      <label>节点
+        <select id="sel-node">
+          <option value="baseline" selected>日常 baseline</option>
+          <option value="national_day">国庆节点</option>
+        </select>
+      </label>
+      <label>情景
+        <select id="sel-scenario">
+          <option value="A" selected>A · clear</option>
+          <option value="B">B · rain</option>
+        </select>
+      </label>
+      <button type="button" class="primary" id="btn-export">导出 snapshot</button>
+      <button type="button" id="btn-enter-ride">进入出行</button>
+    </div>
+
+    <div class="main">
+      <div class="map-wrap">
+        <div id="banner" class="banner" role="status"></div>
+        <div class="toolbar">
+          <div class="card" id="ov-controls">
+            <strong>总览 metric</strong>
+            <div class="row">
+              <label>指标
+                <select id="ov-metric">
+                  <option value="ride_gap" selected>ride_gap</option>
+                  <option value="ride_demand">ride_demand</option>
+                  <option value="ride_supply">ride_supply</option>
+                </select>
+              </label>
+            </div>
+            <div class="legend">
+              <span><i class="swatch" style="background:#ef4444"></i>缺口高</span>
+              <span><i class="swatch" style="background:#38bdf8"></i>供给余</span>
+            </div>
+          </div>
+          <div class="card" id="ride-layers" style="display:none">
+            <strong>出行图层</strong>
+            <div class="row">
+              <label><input type="checkbox" id="layer-demand" checked /> demand</label>
+              <label><input type="checkbox" id="layer-supply" checked /> supply</label>
+              <label><input type="checkbox" id="layer-gap" checked /> gap</label>
+              <label><input type="checkbox" id="layer-roads" /> 路网</label>
+            </div>
+            <div class="legend">填色优先 gap；demand/supply 同屏契约 · 无 supply 则禁用 gap</div>
+          </div>
+        </div>
+        <div id="map" role="application" aria-label="地图"></div>
+      </div>
+
+      <aside class="side">
+        <div class="side-head">
+          <h2 id="list-title">总览 · 缺口 TopN</h2>
+          <div class="meta" id="list-meta">加载中…</div>
+          <div class="formula" id="formula-box" title="只读公式">gap = demand - supply (scene=ride)</div>
+        </div>
+        <div class="side-body">
+          <div id="list-body"></div>
+          <div class="detail" id="detail">
+            <h3>详情</h3>
+            <p>点选网格查看 demand × supply 与路网说明。</p>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <footer class="footer">
+      <span id="status">启动中…</span>
+      <span>© OpenStreetMap contributors · 高德 Key 仅本地 config</span>
+      <span id="scene-formula"></span>
+    </footer>
+  </div>
+
+  <!-- config: example always; local overrides if present -->
+  <script src="config.local.example.js"></script>
+  <script src="config.local.js" onerror="/* optional */"></script>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script>
+    // CDN fallback if local Leaflet failed
+    if (typeof L === "undefined") {
+      document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>');
+      document.write('<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />');
+    }
+  </script>
+  <script src="js/app-context.js"></script>
+  <script src="js/metrics.js"></script>
+  <script src="js/data-loader.js"></script>
+  <script src="js/map-app.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

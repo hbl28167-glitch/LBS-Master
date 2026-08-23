@@ -1,5 +1,7 @@
 .env
 public/config.local.js
+public/data/**
+!public/data/.gitkeep
 data/raw/**
 !data/raw/**/
 !data/raw/**/.gitkeep
