@@ -9,20 +9,55 @@
     weather: "clear",
     scenario: "A",
     active_scene: "overview",
+    active_pack: "overview",
     selected_grid_id: null,
     selected_entity: null,
-    layer_set: ["gap", "roads"],
+    selected_zone_id: null,
+    selected_road_id: null,
+    layer_set: ["basemap", "water", "roads", "road_cong", "zones", "heat"],
     snapshot_id: null,
-    pack: "overview",
-    ov_metric: "ride_gap",
-    siting_open: false,
-    siting_grid_id: null
+    roadDisplayMode: "cong",
+    heatRenderMode: "poly",
+    lodLevel: "district",
+    storeFocusId: null,
+    storeFocusMode: false,
+    congestion: {
+      share_blocked: null,
+      difficulty_coeff: 1,
+      narrative: null
+    },
+    metric_key: "ride_gap",
+    side_panel: "list"
+  };
+
+  const PACK_SCENE = {
+    overview: "overview",
+    o2o: "o2o_store",
+    ride: "ride",
+    fulfillment: "delivery",
+    energy: "chg",
+    governance: "quality"
+  };
+
+  const PACK_LAYERS = {
+    overview: ["basemap", "water", "roads", "road_cong", "zones", "heat"],
+    ride: ["basemap", "water", "roads", "road_cong", "zones", "heat"],
+    fulfillment: ["basemap", "water", "roads", "road_cong", "zones", "heat", "stores"],
+    o2o: ["basemap", "water", "roads", "zones", "heat", "stores"],
+    energy: ["basemap", "water", "roads", "zones", "heat", "chargers"],
+    governance: ["basemap", "water", "roads", "zones", "quality"]
   };
 
   const listeners = new Set();
-  let state = Object.assign({}, DEFAULT, {
-    region: Object.assign({}, DEFAULT.region)
-  });
+  let state = hydrate(DEFAULT);
+
+  function hydrate(s) {
+    return Object.assign({}, s, {
+      region: Object.assign({}, s.region),
+      layer_set: (s.layer_set || []).slice(),
+      congestion: Object.assign({}, s.congestion || {})
+    });
+  }
 
   function clone(s) {
     return {
@@ -33,14 +68,21 @@
       weather: s.weather,
       scenario: s.scenario,
       active_scene: s.active_scene,
+      active_pack: s.active_pack,
       selected_grid_id: s.selected_grid_id,
       selected_entity: s.selected_entity,
+      selected_zone_id: s.selected_zone_id,
+      selected_road_id: s.selected_road_id,
       layer_set: s.layer_set.slice(),
       snapshot_id: s.snapshot_id,
-      pack: s.pack,
-      ov_metric: s.ov_metric,
-      siting_open: !!s.siting_open,
-      siting_grid_id: s.siting_grid_id || null
+      roadDisplayMode: s.roadDisplayMode,
+      heatRenderMode: s.heatRenderMode,
+      lodLevel: s.lodLevel,
+      storeFocusId: s.storeFocusId,
+      storeFocusMode: s.storeFocusMode,
+      congestion: Object.assign({}, s.congestion),
+      metric_key: s.metric_key,
+      side_panel: s.side_panel
     };
   }
 
@@ -54,19 +96,33 @@
       try {
         fn(cur, prev);
       } catch (e) {
-        console.error("AppContext subscriber error", e);
+        console.error("AppContext subscriber", e);
       }
     });
   }
 
   function set(patch) {
     const prev = get();
-    const next = Object.assign({}, state, patch);
+    const next = Object.assign({}, state, patch || {});
     if (patch && patch.region) {
       next.region = Object.assign({}, state.region, patch.region);
     }
-    if (patch && patch.layer_set) {
-      next.layer_set = patch.layer_set.slice();
+    if (patch && patch.layer_set) next.layer_set = patch.layer_set.slice();
+    if (patch && patch.congestion) {
+      next.congestion = Object.assign({}, state.congestion, patch.congestion);
+    }
+    if (patch && Object.prototype.hasOwnProperty.call(patch, "storeFocusId")) {
+      if (patch.storeFocusId) {
+        next.storeFocusMode = true;
+        next.storeFocusId = patch.storeFocusId;
+      } else {
+        next.storeFocusMode = false;
+        next.storeFocusId = null;
+      }
+    }
+    if (patch && Object.prototype.hasOwnProperty.call(patch, "storeFocusMode") && !patch.storeFocusMode) {
+      next.storeFocusId = null;
+      next.storeFocusMode = false;
     }
     state = next;
     notify(prev);
@@ -80,42 +136,27 @@
     };
   }
 
-  /**
-   * Switch business pack: inherit region + time dims + selection; rewrite active_scene.
-   */
   function switchPack(pack) {
-    const prev = get();
-    let active_scene = "overview";
-    let layer_set = ["gap"];
-    if (pack === "ride") {
-      active_scene = "ride";
-      layer_set = ["demand", "supply", "gap", "roads"];
-    } else if (pack === "overview") {
-      active_scene = "overview";
-      layer_set = ["gap", "roads"];
-    } else if (pack === "energy") {
-      layer_set = ["gap", "chargers", "roads"];
-    } else if (pack === "governance") {
-      layer_set = ["quality", "chargers", "roads"];
-    } else {
-      active_scene = pack;
-      layer_set = state.layer_set.slice();
-    }
-    state = Object.assign({}, state, {
-      pack: pack,
-      active_scene: active_scene,
-      layer_set: layer_set,
-      // inherit: region, time_of_day, season_or_node, weather, scenario, selected_*
-      selected_grid_id: state.selected_grid_id,
-      selected_entity: state.selected_entity,
-      siting_open: pack === "energy" ? state.siting_open : false,
-      siting_grid_id: pack === "energy" ? state.siting_grid_id : null
+    const p = PACK_SCENE[pack] ? pack : "overview";
+    return set({
+      active_pack: p,
+      active_scene: PACK_SCENE[p],
+      layer_set: (PACK_LAYERS[p] || PACK_LAYERS.overview).slice(),
+      storeFocusId: null,
+      storeFocusMode: false,
+      metric_key:
+        p === "ride"
+          ? "ride_gap"
+          : p === "fulfillment"
+            ? "delivery_gap"
+            : p === "energy"
+              ? "chg_gap"
+              : p === "o2o"
+                ? "o2o_demand"
+                : "ride_gap"
     });
-    notify(prev);
-    return get();
   }
 
-  /** Scenario A = clear + keep TOD; B = rain + same TOD. */
   function applyScenario(id) {
     const sid = id === "B" ? "B" : "A";
     return set({
@@ -134,15 +175,26 @@
       weather: c.weather,
       scenario: c.scenario,
       active_scene: c.active_scene,
+      active_pack: c.active_pack,
       selected_grid_id: c.selected_grid_id,
       selected_entity: c.selected_entity,
+      selected_zone_id: c.selected_zone_id,
+      selected_road_id: c.selected_road_id,
       layer_set: c.layer_set,
-      snapshot_id: c.snapshot_id
+      snapshot_id: c.snapshot_id,
+      roadDisplayMode: c.roadDisplayMode,
+      heatRenderMode: c.heatRenderMode,
+      lodLevel: c.lodLevel,
+      storeFocusId: c.storeFocusId,
+      storeFocusMode: c.storeFocusMode,
+      congestion: c.congestion,
+      metric_key: c.metric_key
     };
   }
 
   global.AppContext = {
     DEFAULT: DEFAULT,
+    PACK_SCENE: PACK_SCENE,
     get: get,
     set: set,
     subscribe: subscribe,

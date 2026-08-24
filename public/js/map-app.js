@@ -1,459 +1,450 @@
 (function (global) {
   "use strict";
 
-  function parseGridId(id) {
-    // sh:{cell_m}:{row}:{col}
-    const p = String(id || "").split(":");
-    if (p.length < 4) return null;
-    return {
-      cell_m: Number(p[1]),
-      row: Number(p[2]),
-      col: Number(p[3])
-    };
-  }
-
   function createMapApp(elId, options) {
     const opts = options || {};
-    const amapKey = opts.amapKey || "";
+    const amapKey = (opts.amapKey || "").trim();
     const map = L.map(elId, {
       zoomControl: true,
-      preferCanvas: true
+      preferCanvas: true,
+      minZoom: 9,
+      maxZoom: 17
     });
+    map.setView([31.23, 121.48], 12);
 
-    // Shanghai center (GCJ-ish). Zoom 12 shows secondary+ mesh (less "broken" than 11).
-    map.setView([31.23, 121.47], 12);
-
-    let basemapOk = false;
-    let basemapLayer = null;
-    const attribution =
-      '© <a href="https://www.openstreetmap.org/copyright">OSM</a>';
-
-    // Same Gaode raster TMS as portfolio demos (GCJ-02). Tile URL has no key param;
-    // amapKey reserved for JS API / open-platform apps. Always prefer 高德 for road align.
-    const gaodeUrl =
-      "https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}";
-    basemapLayer = L.tileLayer(gaodeUrl, {
-      subdomains: "1234",
-      maxZoom: 18,
-      minZoom: 8,
-      attribution: "© 高德地图 · " + attribution
-    });
-    let gaodeFailed = false;
-    basemapLayer.on("tileerror", function () {
-      if (gaodeFailed) return;
-      gaodeFailed = true;
-      // Network block / tile deny → WGS fallback (may offset vs GCJ roads)
-      try {
-        map.removeLayer(basemapLayer);
-      } catch (e) {}
-      basemapLayer = L.tileLayer(
+    let basemapOk = !!amapKey;
+    if (amapKey) {
+      L.tileLayer(
+        "https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}",
+        {
+          subdomains: "1234",
+          maxZoom: 18,
+          attribution: "© 高德地图 · © OSM"
+        }
+      ).addTo(map);
+    } else {
+      L.tileLayer(
         "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
         {
           subdomains: "abcd",
           maxZoom: 18,
-          attribution: "© CARTO · " + attribution + " · 高德瓦片不可用时的 fallback"
+          attribution: "© CARTO · © OSM · fallback basemap"
         }
-      );
-      basemapLayer.addTo(map);
-      basemapOk = false;
-    });
-    basemapLayer.addTo(map);
-    basemapOk = true;
-    void amapKey;
-
-    const gridLayer = L.layerGroup().addTo(map);
-    const entityLayer = L.layerGroup().addTo(map);
-    const qualityLayer = L.layerGroup().addTo(map);
-    const sitingLayer = L.layerGroup().addTo(map);
-    const roadsLayer = L.layerGroup();
-    let roadsAdded = false;
-    let roadsLoaded = false;
-    let roadsGeo = null;
-    let roadsGeoLayer = null;
-    let selectedId = null;
-    let onSelect = null;
-    let cellHalfDeg = null;
-
-    function estimateHalfDeg(gridsDoc) {
-      // ~1000m cell → approx degrees at Shanghai lat
-      const m = (gridsDoc && gridsDoc.cell_m) || 1000;
-      const lat = 31.2;
-      const dLat = m / 111320;
-      const dLng = m / (111320 * Math.cos((lat * Math.PI) / 180));
-      return { dLat: dLat / 2, dLng: dLng / 2, cell_m: m };
+      ).addTo(map);
     }
 
-    function clearGrids() {
-      gridLayer.clearLayers();
+    const waterLayer = L.layerGroup().addTo(map);
+    const zoneBaseLayer = L.layerGroup().addTo(map);
+    const heatLayer = L.layerGroup().addTo(map);
+    const roadsLayer = L.layerGroup().addTo(map);
+    const pointsLayer = L.layerGroup().addTo(map);
+    const overlayLayer = L.layerGroup().addTo(map);
+
+    let roadsFc = null;
+    let roadsCanvas = null;
+    let zoneLayers = new Map();
+    let onRoadClick = null;
+    let onZoneClick = null;
+    let onStoreClick = null;
+    let selectedRoadId = null;
+    let selectedZoneId = null;
+    let lastRoadStyleCtx = null;
+
+    function setHandlers(h) {
+      onRoadClick = h && h.onRoadClick;
+      onZoneClick = h && h.onZoneClick;
+      onStoreClick = h && h.onStoreClick;
     }
 
-    function setOnSelect(fn) {
-      onSelect = fn;
+    function setWater(geojson) {
+      waterLayer.clearLayers();
+      if (!geojson || !geojson.features) return;
+      L.geoJSON(geojson, {
+        style: {
+          color: "#1e3a5f",
+          weight: 1,
+          fillColor: "#0f2744",
+          fillOpacity: 0.85,
+          opacity: 0.9
+        },
+        interactive: false
+      }).addTo(waterLayer);
     }
 
-    function setSelected(id) {
-      selectedId = id;
-      gridLayer.eachLayer(function (layer) {
-        const gid = layer.options && layer.options.gridId;
-        if (!gid) return;
-        const isSel = gid === selectedId;
+    function setZones(geojson, optsZ) {
+      zoneBaseLayer.clearLayers();
+      zoneLayers = new Map();
+      if (!geojson || !geojson.features) return;
+      const showType = !optsZ || optsZ.showType !== false;
+      L.geoJSON(geojson, {
+        style: function (f) {
+          const p = f.properties || {};
+          return {
+            color: p.stroke || "#94a3b8",
+            weight: 1.2,
+            fillColor: showType ? p.fill || "#64748b" : "transparent",
+            fillOpacity: showType ? p.fill_opacity != null ? p.fill_opacity : 0.32 : 0,
+            opacity: 0.9
+          };
+        },
+        onEachFeature: function (f, layer) {
+          const p = f.properties || {};
+          const zid = p.zone_id;
+          if (zid) zoneLayers.set(zid, layer);
+          layer.on("click", function (e) {
+            L.DomEvent.stopPropagation(e);
+            if (onZoneClick) onZoneClick(zid, p, f);
+          });
+          layer.bindTooltip(
+            (p.name || zid || "") +
+              (p.zone_type ? " · " + p.zone_type : "") +
+              (p.grade ? " · " + p.grade : ""),
+            { sticky: true, opacity: 0.9 }
+          );
+        }
+      }).addTo(zoneBaseLayer);
+    }
+
+    function setZoneSelection(zid) {
+      selectedZoneId = zid;
+      zoneLayers.forEach(function (layer, id) {
+        const on = id === zid;
         layer.setStyle({
-          weight: isSel ? 2.5 : 0.4,
-          color: isSel ? "#f8fafc" : "rgba(15,23,42,0.35)",
-          fillOpacity: isSel ? 0.78 : layer.options._baseOpacity || 0.55
+          weight: on ? 2.5 : 1.2,
+          color: on ? "#f8fafc" : layer.options.color
         });
       });
     }
 
-    /**
-     * items: [{grid, value, metric, fill}]
-     */
-    function renderGrids(items, gridsDoc) {
-      clearGrids();
-      cellHalfDeg = estimateHalfDeg(gridsDoc);
-      const list = items || [];
-      // Cap for perf: prefer items already filtered; still hard-cap
-      const maxDraw = 8000;
-      const draw = list.length > maxDraw ? downsample(list, maxDraw) : list;
+    function clearHeat() {
+      heatLayer.clearLayers();
+    }
 
+    /** Zone polygon heat: items {zone_id, value, fill} */
+    function renderZoneHeat(geojson, valueByZone) {
+      clearHeat();
+      if (!geojson || !geojson.features) return;
+      L.geoJSON(geojson, {
+        style: function (f) {
+          const p = f.properties || {};
+          const zid = p.zone_id;
+          const rec = valueByZone.get(zid);
+          if (!rec) {
+            return {
+              fillOpacity: 0,
+              opacity: 0,
+              weight: 0
+            };
+          }
+          return {
+            color: "rgba(255,255,255,0.25)",
+            weight: 0.8,
+            fillColor: rec.fill,
+            fillOpacity: 0.48,
+            opacity: 0.7
+          };
+        },
+        interactive: true,
+        onEachFeature: function (f, layer) {
+          const p = f.properties || {};
+          const rec = valueByZone.get(p.zone_id);
+          if (rec) {
+            layer.bindTooltip(
+              (p.name || p.zone_id) + "<br/>" + rec.label,
+              { sticky: true }
+            );
+            layer.on("click", function (e) {
+              L.DomEvent.stopPropagation(e);
+              if (onZoneClick) onZoneClick(p.zone_id, p, f);
+            });
+          }
+        }
+      }).addTo(heatLayer);
+    }
+
+    /** Fine grid heat circles/rects */
+    function renderFineHeat(cells) {
+      clearHeat();
+      const list = cells || [];
+      const maxN = 6000;
+      const draw = list.length > maxN ? list.slice(0, maxN) : list;
       for (let i = 0; i < draw.length; i++) {
-        const it = draw[i];
-        const g = it.grid;
-        if (!g || g.cell_lng == null) continue;
-        const h = cellHalfDeg;
-        const bounds = [
-          [g.cell_lat - h.dLat, g.cell_lng - h.dLng],
-          [g.cell_lat + h.dLat, g.cell_lng + h.dLng]
-        ];
-        const fill = it.fill || "#64748b";
-        // Keep grids translucent so road mesh stays readable underneath/over
-        const opacity = it.opacity != null ? it.opacity : 0.32;
-        const rect = L.rectangle(bounds, {
-          gridId: g.grid_id,
-          _baseOpacity: opacity,
-          color: "rgba(15,23,42,0.35)",
-          weight: 0.4,
-          fillColor: fill,
-          fillOpacity: opacity,
-          interactive: true
-        });
-        rect.on("click", function () {
-          if (onSelect) onSelect(g.grid_id, g);
-        });
-        rect.bindTooltip(
-          g.grid_id +
-            (it.label
-              ? "<br/>" + it.label
-              : it.value != null
-                ? "<br/>" + Number(it.value).toFixed(1)
-                : ""),
-          { sticky: true, opacity: 0.9 }
-        );
-        gridLayer.addLayer(rect);
+        const c = draw[i];
+        if (!c || c.lng == null) continue;
+        const r = c.cell_m ? Math.max(80, c.cell_m * 0.35) : 120;
+        L.circle([c.lat, c.lng], {
+          radius: r,
+          color: "transparent",
+          fillColor: c.fill,
+          fillOpacity: 0.4,
+          interactive: false
+        }).addTo(heatLayer);
       }
-      if (selectedId) setSelected(selectedId);
     }
 
-    function downsample(arr, n) {
-      if (arr.length <= n) return arr;
-      // keep highest |value| first if present
-      const scored = arr.slice().sort(function (a, b) {
-        const av = a.value == null ? 0 : Math.abs(a.value);
-        const bv = b.value == null ? 0 : Math.abs(b.value);
-        return bv - av;
+    /** KDE-ish: soft circles at zone centroids weighted by value */
+    function renderKde(points) {
+      clearHeat();
+      (points || []).forEach(function (p) {
+        L.circle([p.lat, p.lng], {
+          radius: p.radius || 900,
+          color: "transparent",
+          fillColor: p.fill || "rgba(240,113,120,0.35)",
+          fillOpacity: 0.28,
+          interactive: false
+        }).addTo(heatLayer);
       });
-      return scored.slice(0, n);
     }
 
-    function roadStyle(hw, z) {
-      const h = String(hw || "");
-      const zoomBoost = z >= 13 ? 1.15 : z >= 12 ? 1.05 : 1;
-      // Brighter + thicker so secondary/tertiary read as a connected mesh
-      if (/motorway/.test(h))
-        return {
-          color: "#7dd3fc",
-          weight: 3.2 * zoomBoost,
-          opacity: 0.95,
-          lineCap: "round",
-          lineJoin: "round"
-        };
-      if (/trunk/.test(h))
-        return {
-          color: "#38bdf8",
-          weight: 2.6 * zoomBoost,
-          opacity: 0.92,
-          lineCap: "round",
-          lineJoin: "round"
-        };
-      if (/primary/.test(h))
-        return {
-          color: "#0ea5e9",
-          weight: 2.2 * zoomBoost,
-          opacity: 0.88,
-          lineCap: "round",
-          lineJoin: "round"
-        };
-      if (/secondary/.test(h))
-        return {
-          color: "#94a3b8",
-          weight: 1.7 * zoomBoost,
-          opacity: 0.82,
-          lineCap: "round",
-          lineJoin: "round"
-        };
-      if (/tertiary/.test(h))
-        return {
-          color: "#cbd5e1",
-          weight: 1.35 * zoomBoost,
-          opacity: 0.78,
-          lineCap: "round",
-          lineJoin: "round"
-        };
-      if (/residential|unclassified|living_street/.test(h))
-        return {
-          color: "#64748b",
-          weight: 1.1 * zoomBoost,
-          opacity: 0.7,
-          lineCap: "round",
-          lineJoin: "round"
-        };
+    function setRoads(geojson) {
+      roadsFc = geojson;
+      rebuildRoads(lastRoadStyleCtx || {});
+    }
+
+    function rebuildRoads(ctx) {
+      lastRoadStyleCtx = ctx || {};
+      roadsLayer.clearLayers();
+      roadsCanvas = null;
+      if (!roadsFc || !roadsFc.features) return;
+
+      const mode = ctx.mode || "cong";
+      const lod = ctx.lod || "district";
+      const cityIndex = ctx.cityIndex != null ? ctx.cityIndex : 0.55;
+      const weather = ctx.weather || "clear";
+      const tod = ctx.tod || "wd_pm_peak";
+      const difficulty = ctx.difficulty != null ? ctx.difficulty : 1;
+      const zoom = map.getZoom();
+      const show = ctx.show !== false;
+
+      if (!show) return;
+
+      const feats = roadsFc.features;
+      // Build filtered FC by LOD
+      const filtered = [];
+      for (let i = 0; i < feats.length; i++) {
+        const f = feats[i];
+        const hw = (f.properties && f.properties.highway) || "";
+        if (!LBSMetrics.roadClassVisible(hw, lod)) continue;
+        // city: skip links sometimes
+        if (lod === "city" && /_link$/.test(hw) && !/motorway|trunk/.test(hw))
+          continue;
+        filtered.push(f);
+      }
+
+      // Cap very large sets at city zoom
+      let use = filtered;
+      if (lod === "city" && use.length > 8000) {
+        use = prioritizeRoads(use, 8000);
+      } else if (use.length > 28000) {
+        use = prioritizeRoads(use, 28000);
+      }
+
+      const fc = { type: "FeatureCollection", features: use };
+      roadsCanvas = L.geoJSON(fc, {
+        style: function (f) {
+          return styleRoad(f, mode, cityIndex, weather, tod, difficulty, zoom);
+        },
+        onEachFeature: function (f, layer) {
+          const p = f.properties || {};
+          const id = String(p.osm_id != null ? p.osm_id : layer._leaflet_id);
+          p._road_id = id;
+          layer.on("click", function (e) {
+            L.DomEvent.stopPropagation(e);
+            if (onRoadClick) {
+              const cong = LBSMetrics.wayCongestion(p, cityIndex, weather, tod);
+              const ll = e.latlng
+                ? [e.latlng.lat, e.latlng.lng]
+                : firstLatLng(f);
+              onRoadClick(id, p, cong, f, ll);
+            }
+          });
+          const nm = p.name || p.ref || "未命名路段";
+          layer.bindTooltip(nm + " · " + (p.highway || ""), {
+            sticky: true,
+            opacity: 0.85
+          });
+        }
+      }).addTo(roadsLayer);
+
+      if (selectedRoadId) highlightRoad(selectedRoadId);
+    }
+
+    function firstLatLng(f) {
+      try {
+        const c = f.geometry && f.geometry.coordinates;
+        if (!c) return null;
+        const ring = f.geometry.type === "LineString" ? c : c[0];
+        if (ring && ring[0]) return [ring[0][1], ring[0][0]];
+      } catch (e) {}
+      return null;
+    }
+
+    function prioritizeRoads(feats, n) {
+      const rank = function (hw) {
+        if (/motorway/.test(hw)) return 0;
+        if (/trunk/.test(hw)) return 1;
+        if (/primary/.test(hw)) return 2;
+        if (/secondary/.test(hw)) return 3;
+        return 4;
+      };
+      return feats
+        .slice()
+        .sort(function (a, b) {
+          return (
+            rank((a.properties && a.properties.highway) || "") -
+            rank((b.properties && b.properties.highway) || "")
+          );
+        })
+        .slice(0, n);
+    }
+
+    function styleRoad(f, mode, cityIndex, weather, tod, difficulty, zoom) {
+      const p = f.properties || {};
+      const hw = p.highway || "";
+      const cong = LBSMetrics.wayCongestion(p, cityIndex, weather, tod);
+      let color = "#94a3b8";
+      if (mode === "grade") color = LBSMetrics.gradeColor(hw);
+      else if (mode === "biz") color = LBSMetrics.bizColor(cong, difficulty);
+      else color = LBSMetrics.congColor(cong);
+      const w = LBSMetrics.gradeWeight(hw, zoom);
       return {
-        color: "#475569",
-        weight: 1.0,
-        opacity: 0.55,
+        color: color,
+        weight: w,
+        opacity: mode === "grade" ? 0.9 : 0.88,
         lineCap: "round",
         lineJoin: "round"
       };
     }
 
-    function roadRank(hw) {
-      const h = String(hw || "");
-      if (/motorway/.test(h)) return 5;
-      if (/trunk/.test(h)) return 4;
-      if (/primary/.test(h)) return 3;
-      if (/secondary/.test(h)) return 2;
-      if (/tertiary/.test(h)) return 1;
-      if (/residential|unclassified|living_street/.test(h)) return 0;
-      return 0;
+    function highlightRoad(id) {
+      selectedRoadId = id;
+      if (!roadsCanvas) return;
+      roadsCanvas.eachLayer(function (layer) {
+        const p = layer.feature && layer.feature.properties;
+        const rid = p && String(p.osm_id != null ? p.osm_id : "");
+        const on = rid === String(id);
+        if (on) {
+          layer.setStyle({
+            weight: (layer.options.weight || 2) + 2.5,
+            opacity: 1
+          });
+          if (layer.bringToFront) layer.bringToFront();
+        }
+      });
     }
 
-    /**
-     * Zoom class filter — show connecting mesh early (was too aggressive:
-     * z=11 only primary+ looked "broken").
-     *  z < 10  → trunk+
-     *  z < 11  → primary+
-     *  z < 12  → secondary+   ← default city view includes secondary mesh
-     *  z >= 12 → tertiary+
-     *  z >= 14 → residential if present
-     */
-    function filterRoadsByZoom(feats, z) {
-      let minRank = 0;
-      if (z < 10) minRank = 4;
-      else if (z < 11) minRank = 3;
-      else if (z < 12) minRank = 2;
-      else if (z < 14) minRank = 1;
-      else minRank = 0;
-
-      const out = [];
-      for (let i = 0; i < feats.length; i++) {
-        const f = feats[i];
-        const hw = f.properties && f.properties.highway;
-        if (roadRank(hw) >= minRank) out.push(f);
-      }
-      // Canvas can handle large sets; only cap at very low zoom if extreme
-      const maxF = z < 11 ? 25000 : z < 13 ? 50000 : 80000;
-      if (out.length > maxF) {
-        // Prefer keeping higher-class roads when capping
-        out.sort(function (a, b) {
-          return (
-            roadRank(b.properties && b.properties.highway) -
-            roadRank(a.properties && a.properties.highway)
-          );
+    function setPoints(list, kind, lod, focusId) {
+      pointsLayer.clearLayers();
+      if (!list || !list.length) return;
+      let pts = list;
+      if (focusId) {
+        pts = list.filter(function (e) {
+          return e.entity_id === focusId || e.name === focusId;
         });
-        return out.slice(0, maxF);
+      } else if (lod === "city") {
+        // sample
+        const step = Math.max(1, Math.ceil(list.length / 80));
+        pts = [];
+        for (let i = 0; i < list.length; i += step) pts.push(list[i]);
+      } else if (lod === "district") {
+        const step = Math.max(1, Math.ceil(list.length / 350));
+        pts = [];
+        for (let i = 0; i < list.length; i += step) pts.push(list[i]);
       }
-      return out;
+
+      const color = kind === "charger" ? "#3dd68c" : "#56b6c2";
+      pts.forEach(function (e) {
+        if (e.lng == null || e.lat == null) return;
+        const m = L.circleMarker([e.lat, e.lng], {
+          radius: focusId ? 8 : 4,
+          color: "#fff",
+          weight: 1,
+          fillColor: color,
+          fillOpacity: 0.9
+        });
+        m.bindTooltip(e.name || e.entity_id, { direction: "top" });
+        m.on("click", function (ev) {
+          L.DomEvent.stopPropagation(ev);
+          if (onStoreClick) onStoreClick(e);
+        });
+        m.addTo(pointsLayer);
+      });
     }
 
-    function rebuildRoadsLayer() {
-      roadsLayer.clearLayers();
-      roadsGeoLayer = null;
-      if (!roadsGeo || !roadsGeo.features) {
-        roadsLoaded = false;
-        return;
-      }
-      const z = map.getZoom();
-      const feats = filterRoadsByZoom(roadsGeo.features, z);
-      const layer = L.geoJSON(
-        { type: "FeatureCollection", features: feats },
-        {
-          renderer: L.canvas({ padding: 0.5 }),
-          style: function (f) {
-            return roadStyle(f.properties && f.properties.highway, z);
-          },
-          interactive: false
-        }
-      );
-      roadsLayer.addLayer(layer);
-      roadsGeoLayer = layer;
-      roadsLoaded = true;
+    function setEtaRing(latlng, radiusM) {
+      overlayLayer.clearLayers();
+      if (!latlng) return;
+      L.circle(latlng, {
+        radius: radiusM || 1500,
+        color: "#56b6c2",
+        weight: 1.5,
+        dashArray: "4 3",
+        fillOpacity: 0.06
+      }).addTo(overlayLayer);
     }
 
-    function setRoads(geojson) {
-      roadsGeo = geojson;
-      rebuildRoadsLayer();
+    function clearOverlay() {
+      overlayLayer.clearLayers();
     }
 
-    map.on("zoomend", function () {
-      if (roadsGeo && roadsAdded) rebuildRoadsLayer();
-    });
-
-    function showRoads(on) {
-      if (on) {
-        if (!roadsAdded) {
-          roadsLayer.addTo(map);
-          roadsAdded = true;
-        }
-      } else if (roadsAdded) {
-        map.removeLayer(roadsLayer);
-        roadsAdded = false;
-      }
+    function showLayer(name, on) {
+      const mapL = {
+        water: waterLayer,
+        zones: zoneBaseLayer,
+        heat: heatLayer,
+        roads: roadsLayer,
+        points: pointsLayer,
+        overlay: overlayLayer
+      };
+      const ly = mapL[name];
+      if (!ly) return;
+      if (on && !map.hasLayer(ly)) ly.addTo(map);
+      if (!on && map.hasLayer(ly)) map.removeLayer(ly);
     }
 
-    function fitToBbox(bbox) {
+    function fitBbox(bbox) {
       if (!bbox || bbox.length < 4) return;
       map.fitBounds(
         [
           [bbox[1], bbox[0]],
           [bbox[3], bbox[2]]
         ],
-        { padding: [20, 20], maxZoom: 12 }
+        { padding: [24, 24], maxZoom: 12 }
       );
     }
 
-    function focusGrid(grid) {
-      if (!grid) return;
-      map.setView([grid.cell_lat, grid.cell_lng], Math.max(map.getZoom(), 13), {
+    function focusLatLng(lat, lng, z) {
+      map.setView([lat, lng], z || Math.max(map.getZoom(), 13), {
         animate: true
       });
     }
 
-    function clearEntities() {
-      entityLayer.clearLayers();
-    }
-
-    function clearQuality() {
-      qualityLayer.clearLayers();
-    }
-
-    function clearSiting() {
-      sitingLayer.clearLayers();
-    }
-
-    /** chargers: [{lng,lat,name,brand,...}] brand display 小李充电 only */
-    function renderChargers(list, opts) {
-      clearEntities();
-      const o = opts || {};
-      if (o.visible === false) return;
-      const arr = list || [];
-      const maxN = o.max != null ? o.max : 200;
-      const step = arr.length > maxN ? Math.ceil(arr.length / maxN) : 1;
-      for (let i = 0; i < arr.length; i += step) {
-        const e = arr[i];
-        if (e.lat == null || e.lng == null) continue;
-        const name = e.name || e.display_name || "小李充电";
-        const m = L.circleMarker([e.lat, e.lng], {
-          radius: 5,
-          color: "#14532d",
-          weight: 1,
-          fillColor: o.color || "#22c55e",
-          fillOpacity: 0.9
-        });
-        m.bindTooltip(name + (e.stalls != null ? " · " + e.stalls + "桩" : ""), {
-          sticky: true
-        });
-        entityLayer.addLayer(m);
-      }
-    }
-
-    /** issues: quality markers — purple/amber, legend 数据质量 */
-    function renderQualityIssues(issues, opts) {
-      clearQuality();
-      const o = opts || {};
-      if (o.visible === false) return;
-      (issues || []).forEach(function (iss) {
-        if (iss.lat == null || iss.lng == null) return;
-        const col =
-          iss.severity === "P0" ? "#a855f7" : iss.severity === "P1" ? "#f59e0b" : "#94a3b8";
-        const m = L.circleMarker([iss.lat, iss.lng], {
-          radius: iss.severity === "P0" ? 8 : 6,
-          color: "#1e1b4b",
-          weight: 1.5,
-          fillColor: col,
-          fillOpacity: 0.92
-        });
-        m.bindTooltip(
-          "[" +
-            iss.severity +
-            "] " +
-            (iss.display_name || "") +
-            "<br/>" +
-            (iss.title || iss.code),
-          { sticky: true }
-        );
-        qualityLayer.addLayer(m);
-      });
-    }
-
-    /** siting candidates A/B markers */
-    function renderSitingCandidates(cands, opts) {
-      clearSiting();
-      const o = opts || {};
-      if (o.visible === false) return;
-      (cands || []).forEach(function (c, idx) {
-        if (c.lat == null || c.lng == null) return;
-        const isWin = o.winner && c.cand_id === o.winner;
-        const m = L.circleMarker([c.lat, c.lng], {
-          radius: isWin ? 10 : 8,
-          color: isWin ? "#fbbf24" : "#e2e8f0",
-          weight: 2,
-          fillColor: idx === 0 ? "#3b82f6" : "#06b6d4",
-          fillOpacity: 0.95
-        });
-        m.bindTooltip(
-          (c.label || c.cand_id) +
-            (c.total != null ? "<br/>分 " + c.total : ""),
-          { sticky: true }
-        );
-        sitingLayer.addLayer(m);
-      });
-    }
+    map.on("zoomend", function () {
+      if (opts.onZoom) opts.onZoom(map.getZoom());
+    });
 
     return {
       map: map,
       basemapOk: basemapOk,
-      renderGrids: renderGrids,
-      setSelected: setSelected,
-      setOnSelect: setOnSelect,
+      setHandlers: setHandlers,
+      setWater: setWater,
+      setZones: setZones,
+      setZoneSelection: setZoneSelection,
+      renderZoneHeat: renderZoneHeat,
+      renderFineHeat: renderFineHeat,
+      renderKde: renderKde,
+      clearHeat: clearHeat,
       setRoads: setRoads,
-      showRoads: showRoads,
-      roadsLoaded: function () {
-        return roadsLoaded;
-      },
-      fitToBbox: fitToBbox,
-      focusGrid: focusGrid,
-      clearGrids: clearGrids,
-      renderChargers: renderChargers,
-      clearEntities: clearEntities,
-      renderQualityIssues: renderQualityIssues,
-      clearQuality: clearQuality,
-      renderSitingCandidates: renderSitingCandidates,
-      clearSiting: clearSiting
+      rebuildRoads: rebuildRoads,
+      highlightRoad: highlightRoad,
+      setPoints: setPoints,
+      setEtaRing: setEtaRing,
+      clearOverlay: clearOverlay,
+      showLayer: showLayer,
+      fitBbox: fitBbox,
+      focusLatLng: focusLatLng
     };
   }
 
-  global.LBSMap = {
-    createMapApp: createMapApp,
-    parseGridId: parseGridId
-  };
+  global.LBSMap = { createMapApp: createMapApp };
 })(typeof window !== "undefined" ? window : globalThis);

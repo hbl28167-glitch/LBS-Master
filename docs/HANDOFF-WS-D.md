@@ -1,75 +1,74 @@
-# HANDOFF WS-D
+# HANDOFF WS-D · 05.1 业务地图台
 
-- 仓绝对路径：`C:\Users\hongbol\Documents\LBS-Master`（可换机；源码相对路径）
+- 仓：`C:\Users\hongbol\Documents\LBS-Master`（可换机）
 - branch：`master`
-- commit：`aaa830a` — `feat(app): overview and ride main path`
-- 依赖：WS-A/B/C（contracts + processed metrics/grids/roads）
+- commit：见 `git log -1`（`feat(ui): map-first shell with road narrative per PRD 05.1`）
+- 依赖：B2 路网 QC PASS · B zones · C zone metrics / entities / congestion_coeff
+- 验收真理：**PRD 05.1** + `docs/acceptance-main-path.md`
 
 ## How to run
 
 ```bash
 cd <repo-root>
-# 若尚无 public/data：
 npm run copy:public-data
-# 或全量
-npm run build
-
 # 可选 Key
 copy public\config.local.example.js public\config.local.js
-# 编辑 amapKey=
-
 npm run serve
-# → http://localhost:4173
+# http://localhost:4173  → Ctrl+F5
 ```
 
-无 Key：fallback 底图 + 顶栏横幅，不崩溃。
+无 Key：fallback 底图 + 横幅，不崩溃。
+
+## 05.1 已实现
+
+| 能力 | 实现 |
+|------|------|
+| IA | 顶栏六包可点 · 情景条 · **叙事条** · 左图右栏（业务列表\|路段分析） |
+| 默认总览 | 底图 + 水系 + 路网拥堵 + 区面类型色 + **面热力**；**无 1km 糊格** |
+| 路网三模式 | `cong` / `grade` / `biz`；整段 way 一色；点击→路段分析+业务文案 |
+| 热力三模式 | `poly` 默认 / `grid`（lazy load fine）/ `kde` |
+| LOD | zoom→city\|district\|block；滤路等级与点密度 |
+| 出行深 | zone demand×supply÷difficulty · TopN · 导出 |
+| 到店 | 门店点 + **单店聚焦**（覆盖圈） |
+| 履约/能源/治理 | 最小可讲态（非灰死） |
+| 情景 A/B | clear/rain × 路色 + difficulty_coeff 叙事条 |
 
 ## Artifacts
 
 | path | note |
 |------|------|
-| `public/index.html` | 顶栏 IA、全局控件、地图、右侧列表 |
-| `public/css/app.css` | 布局 |
-| `public/js/app-context.js` | AppContext + subscribe；切包继承 region/time/selection |
-| `public/js/metrics.js` | demand/supply/gap；禁止无 supply 冒充 gap |
-| `public/js/data-loader.js` | fetch `public/data/*` |
-| `public/js/map-app.js` | Leaflet 底图/格/路网 |
-| `public/js/main.js` | OV + 出行 + A/B + 导出 |
-| `public/vendor/leaflet/*` | 本地 Leaflet 1.9.4 |
-| `public/data/*` | copy 自 processed/static（含 corridor_copy） |
-| `scripts/copy-public-data.js` | build 末步 |
-| `data/static/corridor_copy.json` | 过江/临港等侧栏文案 |
-| `docs/acceptance-main-path.md` | 主路径 7+1 步勾选 |
+| `public/index.html` | 05.1 壳 |
+| `public/css/app.css` | 对齐 demo 手感 |
+| `public/js/app-context.js` | 05.1 AppContext 字段 |
+| `public/js/metrics.js` | zone gap + 路况合成 + 文案 |
+| `public/js/map-app.js` | 水/区/热/路/点 LOD |
+| `public/js/data-loader.js` | core + lazy fine heat |
+| `public/js/main.js` | 编排 |
+| `docs/acceptance-main-path.md` | 勾选清单 |
 
-## Runtime contract (honored)
+## Runtime
 
 ```text
-demand = demand_base * weather_coeff[w].demand_ride * node_coeff
-supply = supply_base * weather_coeff[w].supply_ride * node_coeff
+demand = demand_base * weather * node
+supply = supply_base * weather * node / difficulty_(scene)
 gap    = demand - supply
+way_cong = f(city congestion_index, highway, weather, tod, name hints)
 ```
 
-- 情景 A：`clear` + 当前 TOD（默认 `wd_pm_peak`）
-- 情景 B：`rain` + 同时段
-- scene 徽章 + 只读公式；Synthetic 标注
-
-## Gate D / 主路径
-
-见 `docs/acceptance-main-path.md` — 全部勾选通过（实现侧自检）。
+数据：`metrics_ride` 等 **zone-primary**；实体 小李门店/充电。
 
 ## Downstream
 
-- **WS-E**：能源/选址/治理浅（顶栏已 disabled 占位）
-- **WS-F**：讲稿与仓库审计
+- E：到店/履约/能源/治理加深  
+- F：demo-script 按 05.1 叙事重写  
 
-## Out of scope (honored)
+## Out of scope
 
-- 未深做能源选址（E）
-- 未改 processed 生成逻辑 / grid_id
-- 未提交 Key / 雇主站名
+- 不重下 OSM / 不编造区面  
+- 不改 processed 生成逻辑（除非契约 bug）
 
 ## Known limits
 
-1. 全量 1.7 万格绘制做了阈值稀疏 + 绝对值排序 cap，演示以中心城/高缺口为主。  
-2. 路网 3.4 万 features 抽样绘制以保帧率。  
-3. 无 Key 时 fallback 底图为 WGS 系第三方瓦片，与 GCJ 路网可能有视觉偏差；配高德 Key 后对齐叙述以 B 的 alignment 为准。
+1. 细格 `metrics_heat_fine` 约 50MB，依赖 copy；缺则回退 poly。  
+2. 5.6 万路段按 LOD 过滤；city 级优先高等级。  
+3. 无 Key 时 fallback 瓦片与 GCJ 路网可能有视觉偏差。

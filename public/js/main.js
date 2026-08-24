@@ -5,372 +5,434 @@
     return document.getElementById(id);
   };
 
-  const ui = {
-    banner: $("banner"),
-    status: $("status"),
-    packOverview: $("nav-overview"),
-    packRide: $("nav-ride"),
-    packEnergy: $("nav-energy"),
-    packGov: $("nav-gov"),
-    sceneBadge: $("scene-badge"),
-    sceneFormula: $("scene-formula"),
-    selTod: $("sel-tod"),
-    selNode: $("sel-node"),
-    selScenario: $("sel-scenario"),
-    btnExport: $("btn-export"),
-    btnEnterRide: $("btn-enter-ride"),
-    ovMetric: $("ov-metric"),
-    layerDemand: $("layer-demand"),
-    layerSupply: $("layer-supply"),
-    layerGap: $("layer-gap"),
-    layerRoads: $("layer-roads"),
-    layerChgGap: $("layer-chg-gap"),
-    layerChargers: $("layer-chargers"),
-    layerRoadsE: $("layer-roads-e"),
-    layerQuality: $("layer-quality"),
-    layerChargersG: $("layer-chargers-g"),
-    layerRoadsG: $("layer-roads-g"),
-    rideLayers: $("ride-layers"),
-    energyLayers: $("energy-layers"),
-    govLayers: $("gov-layers"),
-    ovControls: $("ov-controls"),
-    listTitle: $("list-title"),
-    listMeta: $("list-meta"),
-    listBody: $("list-body"),
-    detail: $("detail"),
-    formulaBox: $("formula-box"),
-    synthNote: $("synth-note"),
-    sitingPanel: $("siting-panel")
-  };
-
   let data = null;
   let mapApp = null;
-  let gridById = new Map();
-  let rideIndex = null;
-  let chgIndex = null;
-  let lastComputed = [];
-  let lastComputedChg = [];
-  let qualityIssues = [];
-  let gapDisabledReason = null;
-  let chgGapDisabledReason = null;
-  let lastSiting = null;
+  let zoneById = new Map();
+  let zonesGeo = null;
+  let fineLoaded = false;
+  let fineLoading = false;
+  let lastCongStats = { share: 0, difficulty: 1 };
+
+  const PACK_LABEL = {
+    overview: "区域总览",
+    o2o: "到店",
+    ride: "出行",
+    fulfillment: "履约",
+    energy: "能源",
+    governance: "治理"
+  };
 
   function cfg() {
-    return (window.LBS_CONFIG && window.LBS_CONFIG) || { amapKey: "" };
+    return window.LBS_CONFIG || { amapKey: "" };
   }
 
-  function showBanner(msg, show) {
-    if (!ui.banner) return;
-    if (show === false || !msg) {
-      ui.banner.classList.remove("show");
-      ui.banner.textContent = "";
+  function showBanner(msg, on) {
+    const el = $("banner-key");
+    if (!el) return;
+    if (!on || !msg) {
+      el.classList.remove("show");
+      el.textContent = "";
       return;
     }
-    ui.banner.textContent = msg;
-    ui.banner.classList.add("show");
+    el.textContent = msg;
+    el.classList.add("show");
   }
 
   function setStatus(t) {
-    if (ui.status) ui.status.textContent = t || "";
+    const el = $("status");
+    if (el) el.textContent = t || "";
   }
 
-  function chargers() {
-    return (data && data.entities_charger && data.entities_charger.entities) || [];
+  function metricRowsForPack(pack) {
+    if (!data) return [];
+    if (pack === "ride") return (data.metrics_ride && data.metrics_ride.rows) || [];
+    if (pack === "fulfillment")
+      return (data.metrics_delivery && data.metrics_delivery.rows) || [];
+    if (pack === "energy") return (data.metrics_chg && data.metrics_chg.rows) || [];
+    if (pack === "o2o") return (data.metrics_o2o && data.metrics_o2o.rows) || [];
+    // overview uses ride gap as stage metric
+    return (data.metrics_ride && data.metrics_ride.rows) || [];
   }
 
-  function corridorText(grid) {
-    const rules = (data && data.corridor && data.corridor.rules) || [];
-    if (!grid) {
-      const d = rules.find(function (r) {
-        return r.id === "default";
-      });
-      return d || { title: "路网解释", body: "" };
-    }
-    const labels = grid.labels || [];
-    for (let i = 0; i < rules.length; i++) {
-      const r = rules[i];
-      if (r.id === "default") continue;
-      if (r.match_labels) {
-        for (let j = 0; j < r.match_labels.length; j++) {
-          if (labels.indexOf(r.match_labels[j]) >= 0) return r;
-        }
+  function sceneForPack(pack) {
+    return AppContext.PACK_SCENE[pack] || "ride";
+  }
+
+  function computeOpts(ctx) {
+    return {
+      weatherDoc: data.weather,
+      calendarDoc: data.calendar,
+      congDoc: data.congestion,
+      weather: ctx.weather,
+      nodeKey: ctx.season_or_node,
+      time_of_day: ctx.time_of_day,
+      scene: sceneForPack(ctx.active_pack)
+    };
+  }
+
+  function computeZoneList(ctx) {
+    const rows = metricRowsForPack(ctx.active_pack);
+    const sc = LBSMetrics.sceneKey(sceneForPack(ctx.active_pack));
+    const idx = LBSMetrics.indexZoneRows(rows, ctx.time_of_day, sc);
+    const opts = computeOpts(ctx);
+    const list = [];
+    idx.forEach(function (row, zid) {
+      const z = zoneById.get(zid);
+      const labels = (z && z.labels) || [];
+      const m = LBSMetrics.applyRow(
+        row,
+        Object.assign({}, opts, { labels: labels })
+      );
+      if (m) {
+        m.name = (z && z.name) || zid;
+        m.zone_type = (z && z.zone_type) || m.zone_type;
+        m.labels = labels;
+        list.push(m);
       }
-      if (r.match_landuse && r.match_landuse.indexOf(grid.landuse) >= 0) {
-        return r;
-      }
-    }
-    return (
-      rules.find(function (r) {
-        return r.id === "default";
-      }) || { title: "路网解释", body: "" }
-    );
+    });
+    return list;
   }
 
-  function rebuildRideIndex() {
-    const ctx = AppContext.get();
-    const rows = (data && data.metrics_ride && data.metrics_ride.rows) || [];
-    rideIndex = LBSMetrics.indexByGrid(rows, ctx.time_of_day, "ride");
-  }
-
-  function rebuildChgIndex() {
-    const ctx = AppContext.get();
-    const rows = (data && data.metrics_chg && data.metrics_chg.rows) || [];
-    chgIndex = LBSMetrics.indexByGrid(rows, ctx.time_of_day, "chg");
-  }
-
-  function currentCoeffs(scene) {
-    const ctx = AppContext.get();
-    const sc = scene || "ride";
-    return LBSMetrics.coeffsFor(
-      data.weather,
-      data.calendar,
+  function updateCongestionDerived(ctx) {
+    const sc = sceneForPack(ctx.active_pack);
+    const bundle = LBSMetrics.difficultyBundle(
+      data.congestion,
       ctx.weather,
-      ctx.season_or_node,
+      ctx.time_of_day,
       sc
     );
-  }
-
-  function computeAllRide() {
-    const c = currentCoeffs("ride");
-    gapDisabledReason = null;
-    if (!c.ok) gapDisabledReason = c.error || "coefficients missing";
-    if (!rideIndex || rideIndex.size === 0) {
-      gapDisabledReason = gapDisabledReason || "no metrics for time_of_day";
-    }
-    const out = [];
-    if (rideIndex) {
-      rideIndex.forEach(function (row) {
-        const computed = LBSMetrics.applyRow(row, c);
-        if (computed) {
-          if (!computed.ok && !gapDisabledReason) gapDisabledReason = computed.error;
-          out.push(computed);
-        }
-      });
-    }
-    lastComputed = out;
-    return { list: out, coeffs: c, gapDisabledReason: gapDisabledReason };
-  }
-
-  function computeAllChg() {
-    const c = currentCoeffs("chg");
-    chgGapDisabledReason = null;
-    if (!c.ok) chgGapDisabledReason = c.error || "coefficients missing";
-    if (!chgIndex || chgIndex.size === 0) {
-      chgGapDisabledReason = chgGapDisabledReason || "no chg metrics for time_of_day";
-    }
-    const out = [];
-    if (chgIndex) {
-      chgIndex.forEach(function (row) {
-        const computed = LBSMetrics.applyRow(row, c);
-        if (computed) {
-          if (!computed.ok && !chgGapDisabledReason) {
-            chgGapDisabledReason = computed.error;
-          }
-          out.push(computed);
-        }
-      });
-    }
-    lastComputedChg = out;
-    return { list: out, coeffs: c, gapDisabledReason: chgGapDisabledReason };
-  }
-
-  function paintMap() {
-    if (!mapApp || !data) return;
-    const ctx = AppContext.get();
-    const pack = ctx.pack;
-
-    if (pack === "gov") {
-      paintGovMap(ctx);
-      return;
-    }
-    if (pack === "energy") {
-      paintEnergyMap(ctx);
-      return;
-    }
-
-    // overview + ride (WS-D path — keep behavior)
-    mapApp.clearQuality();
-    mapApp.clearSiting();
-    mapApp.clearEntities();
-
-    const { list, gapDisabledReason: gdr } = computeAllRide();
-    const byId = new Map();
-    list.forEach(function (x) {
-      if (x && x.grid_id) byId.set(x.grid_id, x);
-    });
-
-    let layers = ctx.layer_set || [];
-    if (pack === "overview") layers = ["gap", "roads"];
-
-    if (layers.indexOf("gap") >= 0 && gdr) {
-      showBanner("gap 不可用：" + gdr + "（未将 demand 当作缺口）", true);
-    } else {
-      showBanner("", false);
-    }
-
-    const items = [];
-    const grids = (data.grids && data.grids.grids) || [];
-    for (let i = 0; i < grids.length; i++) {
-      const g = grids[i];
-      if (!g.is_valid) continue;
-      const m = byId.get(g.grid_id);
-      if (!m || !m.ok) continue;
-
-      let value = null;
-      let fillMetric = "gap";
-      if (pack === "overview") {
-        if (ctx.ov_metric === "ride_demand") {
-          value = m.demand;
-          fillMetric = "demand";
-        } else if (ctx.ov_metric === "ride_supply") {
-          value = m.supply;
-          fillMetric = "supply";
-        } else {
-          if (gdr) continue;
-          value = m.gap;
-          fillMetric = "gap";
-        }
-      } else {
-        if (layers.indexOf("gap") >= 0 && !gdr) {
-          value = m.gap;
-          fillMetric = "gap";
-        } else if (layers.indexOf("demand") >= 0) {
-          value = m.demand;
-          fillMetric = "demand";
-        } else if (layers.indexOf("supply") >= 0) {
-          value = m.supply;
-          fillMetric = "supply";
-        } else {
-          continue;
-        }
+    // estimate share blocked from city index
+    const share = Math.min(0.95, Math.max(0.05, bundle.congestion_index * 0.9));
+    const narrative = buildNarrative(ctx, bundle.difficulty, share);
+    lastCongStats = { share: share, difficulty: bundle.difficulty };
+    AppContext.set({
+      congestion: {
+        share_blocked: share,
+        difficulty_coeff: bundle.difficulty,
+        narrative: narrative
       }
+    });
+    // avoid double notify loop: set already notifies; callers should not re-enter
+  }
 
-      if (fillMetric === "gap" && Math.abs(value) < 3) continue;
-      if (fillMetric !== "gap" && value < 8) continue;
+  function buildNarrative(ctx, diff, share) {
+    const pack = PACK_LABEL[ctx.active_pack] || ctx.active_pack;
+    const w = ctx.weather === "rain" ? "雨天" : "晴天";
+    const tod =
+      ctx.time_of_day === "wd_am_peak"
+        ? "早高峰"
+        : ctx.time_of_day === "we_aft"
+          ? "周末下午"
+          : "晚高峰";
+    if (ctx.selected_road_id) {
+      return (
+        pack +
+        " · 已选路段：路况与难度系数联动（" +
+        w +
+        tod +
+        "，×" +
+        diff.toFixed(2) +
+        "）"
+      );
+    }
+    if (ctx.active_pack === "ride") {
+      return (
+        "出行：" +
+        w +
+        tod +
+        "需求×运力同屏；拥堵抬高匹配难度 ×" +
+        diff.toFixed(2) +
+        "（拥堵路约 " +
+        Math.round(share * 100) +
+        "%）"
+      );
+    }
+    if (ctx.active_pack === "fulfillment") {
+      return (
+        "履约：门店+需求热力+路网；拥堵压缩时效圈（难度 ×" +
+        diff.toFixed(2) +
+        "）"
+      );
+    }
+    if (ctx.active_pack === "o2o") {
+      return "到店：商圈面+门店；点单店进入聚焦，避免千店同亮";
+    }
+    if (ctx.active_pack === "energy") {
+      return "能源：小李充电站网 + 区缺口；路网解释到达走廊";
+    }
+    if (ctx.active_pack === "governance") {
+      return "治理：质量叙事可讲（与经营分色）；不处理终端 GPS 漂移";
+    }
+    return (
+      "总览：底图 + 路网 + 类型区面 + 面热力。点路段读业务难度（" +
+      w +
+      tod +
+      "）"
+    );
+  }
 
-      const maxV = fillMetric === "gap" ? 80 : 100;
-      items.push({
-        grid: g,
-        value: value,
-        fill: LBSMetrics.colorForMetric(value, fillMetric, 0, maxV),
-        opacity: fillMetric === "gap" ? 0.62 : 0.5,
+  function paintStory(ctx) {
+    const t = $("story-t");
+    const d = $("story-d");
+    const sm1 = $("sm-obj");
+    const sm2 = $("sm-cong");
+    const sm3 = $("sm-diff");
+    const cong = ctx.congestion || {};
+    if (t) {
+      t.textContent =
+        (PACK_LABEL[ctx.active_pack] || "") +
+        " · 情景" +
+        ctx.scenario +
+        " · " +
+        (ctx.weather === "rain" ? "雨" : "晴");
+    }
+    if (d) {
+      d.textContent =
+        cong.narrative ||
+        "默认看见路网（拥堵/等级/业务难度）+ 区面 + 面热力。点一条路看右侧「路段分析」。";
+    }
+    if (sm1) {
+      sm1.textContent =
+        ctx.selected_road_id
+          ? "路段 " + ctx.selected_road_id
+          : ctx.selected_zone_id
+            ? ctx.selected_zone_id.split(":").slice(-1)[0]
+            : ctx.storeFocusId
+              ? ctx.storeFocusId
+              : "—";
+    }
+    if (sm2) {
+      const sh =
+        cong.share_blocked != null
+          ? Math.round(cong.share_blocked * 100) + "%"
+          : "—";
+      sm2.textContent = sh;
+    }
+    if (sm3) {
+      sm3.textContent =
+        "×" +
+        (cong.difficulty_coeff != null
+          ? Number(cong.difficulty_coeff).toFixed(2)
+          : "1.00");
+    }
+  }
+
+  function paintMap(ctx) {
+    if (!mapApp || !data) return;
+    const layers = ctx.layer_set || [];
+    const has = function (k) {
+      return layers.indexOf(k) >= 0;
+    };
+
+    mapApp.showLayer("water", true);
+    mapApp.showLayer("zones", has("zones"));
+    mapApp.showLayer("heat", has("heat") || has("heat_grid") || has("heat_kde"));
+    mapApp.showLayer("roads", has("roads") || has("road_cong"));
+    mapApp.showLayer(
+      "points",
+      has("stores") || has("chargers") || ctx.storeFocusMode
+    );
+
+    if (ctx.selected_zone_id) mapApp.setZoneSelection(ctx.selected_zone_id);
+
+    // heat
+    const list = computeZoneList(ctx);
+    const byZone = new Map();
+    let minG = 0;
+    let maxG = 40;
+    list.forEach(function (m) {
+      if (m.ok && m.gap != null) {
+        maxG = Math.max(maxG, m.gap);
+        minG = Math.min(minG, m.gap);
+      }
+    });
+    list.forEach(function (m) {
+      if (!m.ok) return;
+      let val = m.gap;
+      if (ctx.active_pack === "o2o") val = m.demand;
+      if (ctx.metric_key === "ride_demand") val = m.demand;
+      if (ctx.metric_key === "ride_supply") val = m.supply;
+      if (val == null) return;
+      byZone.set(m.zone_id, {
+        value: val,
+        fill: LBSMetrics.heatFill(val, 0, Math.max(40, maxG)),
         label:
-          fillMetric +
-          "=" +
-          value.toFixed(1) +
-          (m.ok
-            ? " · d=" + m.demand.toFixed(1) + " s=" + m.supply.toFixed(1)
+          (ctx.active_pack === "o2o" ? "demand " : "gap ") +
+          Number(val).toFixed(1) +
+          (m.supply != null
+            ? " · d=" + m.demand.toFixed(0) + " s=" + m.supply.toFixed(0)
             : "")
       });
-    }
-
-    mapApp.renderGrids(items, data.grids);
-    mapApp.setSelected(ctx.selected_grid_id);
-    const roadsOn =
-      (ui.layerRoads && ui.layerRoads.checked) || layers.indexOf("roads") >= 0;
-    mapApp.showRoads(!!roadsOn);
-  }
-
-  function paintEnergyMap(ctx) {
-    mapApp.clearQuality();
-    const { list, gapDisabledReason: gdr } = computeAllChg();
-    const byId = new Map();
-    list.forEach(function (x) {
-      if (x && x.grid_id) byId.set(x.grid_id, x);
     });
 
-    const showGap = !ui.layerChgGap || ui.layerChgGap.checked;
-    const showChg = !ui.layerChargers || ui.layerChargers.checked;
-
-    if (showGap && gdr) {
-      showBanner("chg gap 不可用：" + gdr, true);
-    } else {
-      showBanner("", false);
-    }
-
-    const items = [];
-    if (showGap && !gdr) {
-      const grids = (data.grids && data.grids.grids) || [];
-      for (let i = 0; i < grids.length; i++) {
-        const g = grids[i];
-        if (!g.is_valid) continue;
-        const m = byId.get(g.grid_id);
-        if (!m || !m.ok) continue;
-        if (m.gap < 3) continue;
-        items.push({
-          grid: g,
-          value: m.gap,
-          fill: LBSMetrics.colorForMetric(m.gap, "gap", 0, 80),
-          opacity: 0.62,
-          label:
-            "chg_gap=" +
-            m.gap.toFixed(1) +
-            " · d=" +
-            m.demand.toFixed(1) +
-            " s=" +
-            m.supply.toFixed(1)
+    const heatMode = ctx.heatRenderMode || "poly";
+    if (heatMode === "poly" && (has("heat") || true)) {
+      if (has("heat")) mapApp.renderZoneHeat(zonesGeo, byZone);
+      else mapApp.clearHeat();
+    } else if (heatMode === "grid") {
+      ensureFineHeat(ctx, list);
+    } else if (heatMode === "kde") {
+      const pts = [];
+      list.forEach(function (m) {
+        const z = zoneById.get(m.zone_id);
+        if (!z || !m.ok) return;
+        const v = m.gap != null ? m.gap : m.demand;
+        if (v == null || v < 5) return;
+        pts.push({
+          lat: z.centroid_lat,
+          lng: z.centroid_lng,
+          radius: 600 + Math.min(1800, v * 20),
+          fill: LBSMetrics.heatFill(v, 0, 80)
         });
-      }
-    }
-    mapApp.renderGrids(items, data.grids);
-    mapApp.setSelected(ctx.selected_grid_id || ctx.siting_grid_id);
-
-    mapApp.renderChargers(showChg ? chargers() : [], {
-      visible: showChg,
-      color: "#22c55e"
-    });
-
-    if (ctx.siting_open && lastSiting && lastSiting.results) {
-      mapApp.renderSitingCandidates(lastSiting.results, {
-        visible: true,
-        winner: lastSiting.compare && lastSiting.compare.winner
       });
-    } else {
-      mapApp.clearSiting();
+      mapApp.renderKde(pts);
     }
 
-    mapApp.showRoads(!!(ui.layerRoadsE && ui.layerRoadsE.checked));
-  }
-
-  function paintGovMap(ctx) {
-    mapApp.clearSiting();
-    mapApp.renderGrids([], data.grids);
-
-    const showQ = !ui.layerQuality || ui.layerQuality.checked;
-    const showChg = !ui.layerChargersG || ui.layerChargersG.checked;
-
-    showBanner("治理边界：不处理终端 GPS 漂移（仅主数据/入口类）", true);
-
-    mapApp.renderChargers(showChg ? chargers() : [], {
-      visible: showChg,
-      color: "#4ade80",
-      max: 120
+    // roads
+    const bundle = LBSMetrics.difficultyBundle(
+      data.congestion,
+      ctx.weather,
+      ctx.time_of_day,
+      sceneForPack(ctx.active_pack)
+    );
+    mapApp.rebuildRoads({
+      mode: ctx.roadDisplayMode || "cong",
+      lod: ctx.lodLevel || "district",
+      cityIndex: bundle.congestion_index,
+      weather: ctx.weather,
+      tod: ctx.time_of_day,
+      difficulty: bundle.difficulty,
+      show: has("roads") || has("road_cong")
     });
-    mapApp.renderQualityIssues(showQ ? qualityIssues : [], { visible: showQ });
-    mapApp.showRoads(!!(ui.layerRoadsG && ui.layerRoadsG.checked));
+    if (ctx.selected_road_id) mapApp.highlightRoad(ctx.selected_road_id);
+
+    // points
+    if (ctx.active_pack === "energy" || has("chargers")) {
+      const ch =
+        (data.chargers && (data.chargers.entities || data.chargers)) || [];
+      mapApp.setPoints(
+        Array.isArray(ch) ? ch : [],
+        "charger",
+        ctx.lodLevel,
+        null
+      );
+    } else if (
+      ctx.active_pack === "o2o" ||
+      ctx.active_pack === "fulfillment" ||
+      has("stores")
+    ) {
+      const st =
+        (data.stores && (data.stores.entities || data.stores)) || [];
+      mapApp.setPoints(
+        Array.isArray(st) ? st : [],
+        "store",
+        ctx.lodLevel,
+        ctx.storeFocusMode ? ctx.storeFocusId : null
+      );
+      if (ctx.storeFocusMode && ctx.storeFocusId) {
+        const ent = (Array.isArray(st) ? st : []).find(function (e) {
+          return e.entity_id === ctx.storeFocusId;
+        });
+        if (ent) {
+          mapApp.setEtaRing([ent.lat, ent.lng], 1200);
+          mapApp.focusLatLng(ent.lat, ent.lng, 15);
+        }
+      } else if (ctx.active_pack === "fulfillment" && ctx.selected_zone_id) {
+        const z = zoneById.get(ctx.selected_zone_id);
+        if (z) {
+          const r = 1800 / Math.max(0.8, bundle.difficulty);
+          mapApp.setEtaRing([z.centroid_lat, z.centroid_lng], r);
+        } else mapApp.clearOverlay();
+      } else {
+        mapApp.clearOverlay();
+      }
+    } else {
+      mapApp.setPoints([], "store", ctx.lodLevel, null);
+      mapApp.clearOverlay();
+    }
   }
 
-  function renderList() {
-    const ctx = AppContext.get();
-    if (ctx.pack === "energy") {
-      renderEnergyList(ctx);
+  function ensureFineHeat(ctx, zoneList) {
+    if (fineLoaded && data.heat_fine && data.grids_fine) {
+      paintFine(ctx);
       return;
     }
-    if (ctx.pack === "gov") {
-      renderGovList(ctx);
-      return;
-    }
+    if (fineLoading) return;
+    fineLoading = true;
+    setStatus("加载细格热力…");
+    LBSData.loadHeatFine().then(function (res) {
+      fineLoading = false;
+      data.heat_fine = res.heat_fine;
+      data.grids_fine = res.grids_fine;
+      fineLoaded = !!(res.heat_fine && res.grids_fine);
+      if (!fineLoaded) {
+        showBanner(
+          "细格热力数据未拷贝到 public/data（可能 gitignore 大文件）。已回退区面热力。运行 npm run copy:public-data 后重试。",
+          true
+        );
+        AppContext.set({ heatRenderMode: "poly" });
+        return;
+      }
+      paintFine(AppContext.get());
+      setStatus("细格热力已加载");
+    });
+  }
 
-    hideSitingPanel();
-    const { list, gapDisabledReason: gdr } = computeAllRide();
-    const top = gdr ? [] : LBSMetrics.topShortage(list, 15);
-
-    if (ui.listTitle) {
-      ui.listTitle.textContent =
-        ctx.pack === "ride" ? "出行缺口 TopN" : "总览 · 缺口 TopN";
+  function paintFine(ctx) {
+    if (!data.heat_fine || !data.grids_fine) return;
+    const sc = LBSMetrics.sceneKey(sceneForPack(ctx.active_pack));
+    const tod = ctx.time_of_day;
+    const gmap = new Map();
+    (data.grids_fine.grids || []).forEach(function (g) {
+      gmap.set(g.grid_id, g);
+    });
+    const opts = computeOpts(ctx);
+    const cells = [];
+    const rows = data.heat_fine.rows || [];
+    // sample rows for current tod+scene
+    let n = 0;
+    for (let i = 0; i < rows.length && n < 12000; i++) {
+      const r = rows[i];
+      if (r.time_of_day !== tod) continue;
+      if (LBSMetrics.sceneKey(r.scene) !== sc) continue;
+      // stride
+      if (i % 3 !== 0) continue;
+      const m = LBSMetrics.applyRow(r, opts);
+      if (!m || !m.ok || m.gap == null || m.gap < 4) continue;
+      const g = gmap.get(r.grid_id);
+      if (!g) continue;
+      cells.push({
+        lng: g.cell_lng,
+        lat: g.cell_lat,
+        cell_m: g.cell_m || 300,
+        fill: LBSMetrics.heatFill(m.gap, 0, 60)
+      });
+      n++;
     }
-    if (ui.listMeta) {
-      ui.listMeta.textContent =
+    mapApp.renderFineHeat(cells);
+  }
+
+  function paintList(ctx) {
+    const tbody = $("tbody");
+    const sideTitle = $("side-title");
+    const sideMeta = $("side-meta");
+    const formula = $("formula-box");
+    if (sideTitle) {
+      sideTitle.textContent =
+        ctx.active_pack === "ride"
+          ? "出行缺口"
+          : ctx.active_pack === "fulfillment"
+            ? "履约缺口"
+            : ctx.active_pack === "energy"
+              ? "补能缺口"
+              : ctx.active_pack === "o2o"
+                ? "到店 / 商圈"
+                : ctx.active_pack === "governance"
+                  ? "治理问题（示意）"
+                  : "区列表 · KPI";
+    }
+    if (sideMeta) {
+      sideMeta.textContent =
         "情景 " +
         ctx.scenario +
         " · " +
@@ -379,857 +441,605 @@
         ctx.time_of_day +
         " · Synthetic";
     }
-    if (ui.formulaBox) {
-      ui.formulaBox.textContent =
-        ctx.pack === "ride" || ctx.active_scene === "ride"
+    if (formula) {
+      formula.textContent =
+        ctx.active_pack === "ride" || ctx.active_pack === "overview"
           ? LBSMetrics.FORMULA_RIDE
-          : "OV 对照 ride_gap（与出行同一公式）\n" + LBSMetrics.FORMULA_RIDE;
-    }
-    if (ui.sceneBadge) {
-      const scene =
-        ctx.pack === "overview" ? "overview→ride_gap" : ctx.active_scene;
-      ui.sceneBadge.innerHTML =
-        "scene <code>" +
-        scene +
-        "</code> · 情景 <strong>" +
-        ctx.scenario +
-        "</strong>";
+          : LBSMetrics.FORMULA_GENERIC;
     }
 
-    const body = ui.listBody;
-    if (!body) return;
-    body.innerHTML = "";
+    if (!tbody) return;
+    tbody.innerHTML = "";
 
-    if (gdr) {
-      const err = document.createElement("div");
-      err.className = "err";
-      err.textContent =
-        "gap 已禁用：" + gdr + "。禁止将 demand 单独显示为缺口。";
-      body.appendChild(err);
+    if (ctx.active_pack === "governance") {
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        "<td colspan='3'><div class='err' style='margin:0'>治理包最小可讲态：经营/质量分色规则在；不处理终端 GPS。完整问题单见 WS-E 深化。</div></td>";
+      tbody.appendChild(tr);
       return;
     }
 
-    if (!top.length) {
-      const empty = document.createElement("div");
-      empty.className = "meta";
-      empty.textContent = "当前切片无正缺口。";
-      body.appendChild(empty);
-      return;
-    }
-
-    top.forEach(function (row, idx) {
-      const el = document.createElement("div");
-      el.className =
-        "list-item" +
-        (ctx.selected_grid_id === row.grid_id ? " active" : "");
-      el.innerHTML =
-        '<div class="title"><span>#' +
-        (idx + 1) +
-        " " +
-        row.grid_id +
-        '</span><span class="tag ' +
-        row.action +
-        '">' +
-        row.action +
-        "</span></div>" +
-        '<div class="vals">' +
-        "<span>gap " +
-        row.gap.toFixed(1) +
-        "</span><span>demand " +
-        row.demand.toFixed(1) +
-        "</span>" +
-        "<span>supply " +
-        row.supply.toFixed(1) +
-        "</span><span>" +
-        (gridById.get(row.grid_id) || {}).landuse +
-        "</span></div>";
-      el.addEventListener("click", function () {
-        AppContext.set({ selected_grid_id: row.grid_id });
-        const g = gridById.get(row.grid_id);
-        if (g) mapApp.focusGrid(g);
-      });
-      body.appendChild(el);
-    });
-
-    renderDetailRide();
-  }
-
-  function renderEnergyList(ctx) {
-    const { list, gapDisabledReason: gdr } = computeAllChg();
-    const top = gdr ? [] : LBSMetrics.topShortage(list, 15);
-
-    if (ui.listTitle) ui.listTitle.textContent = "能源 · chg 缺口 TopN";
-    if (ui.listMeta) {
-      ui.listMeta.textContent =
-        "scene=chg · " +
-        ctx.weather +
-        " · " +
-        ctx.time_of_day +
-        " · 节点 " +
-        ctx.season_or_node +
-        " · 小李充电 Synthetic";
-    }
-    if (ui.formulaBox) ui.formulaBox.textContent = LBSMetrics.FORMULA_CHG;
-    if (ui.sceneBadge) {
-      ui.sceneBadge.innerHTML =
-        "scene <code>chg</code> · 情景 <strong>" + ctx.scenario + "</strong>";
-    }
-
-    const body = ui.listBody;
-    if (!body) return;
-    body.innerHTML = "";
-
-    if (gdr) {
-      const err = document.createElement("div");
-      err.className = "err";
-      err.textContent = "chg gap 已禁用：" + gdr;
-      body.appendChild(err);
-      hideSitingPanel();
-      return;
-    }
-
-    if (!top.length) {
-      body.innerHTML = '<div class="meta">当前切片无正缺口。</div>';
-    } else {
-      top.forEach(function (row, idx) {
-        const el = document.createElement("div");
-        el.className =
-          "list-item" +
-          (ctx.selected_grid_id === row.grid_id ||
-          ctx.siting_grid_id === row.grid_id
-            ? " active"
-            : "");
-        el.innerHTML =
-          '<div class="title"><span>#' +
-          (idx + 1) +
-          " " +
-          row.grid_id +
-          '</span><span class="tag shift_fleet">补能缺口</span></div>' +
-          '<div class="vals">' +
-          "<span>gap " +
-          row.gap.toFixed(1) +
-          "</span><span>demand " +
-          row.demand.toFixed(1) +
-          "</span>" +
-          "<span>supply " +
-          row.supply.toFixed(1) +
-          "</span><span>" +
-          ((gridById.get(row.grid_id) || {}).landuse || "—") +
-          "</span></div>" +
-          '<div class="row-actions"><button type="button" class="primary btn-siting" data-gid="' +
-          row.grid_id +
-          '">发起选址</button></div>';
-        el.addEventListener("click", function (ev) {
-          if (ev.target && ev.target.classList.contains("btn-siting")) return;
-          AppContext.set({ selected_grid_id: row.grid_id });
-          const g = gridById.get(row.grid_id);
-          if (g) mapApp.focusGrid(g);
+    const list = computeZoneList(ctx);
+    let rows = [];
+    if (ctx.active_pack === "o2o") {
+      rows = list
+        .filter(function (x) {
+          return x.ok;
+        })
+        .sort(function (a, b) {
+          return b.demand - a.demand;
+        })
+        .slice(0, 20)
+        .map(function (x) {
+          return Object.assign({}, x, { action: "monitor", display: x.demand });
         });
-        const btn = el.querySelector(".btn-siting");
-        if (btn) {
-          btn.addEventListener("click", function (ev) {
-            ev.stopPropagation();
-            openSiting(row.grid_id);
-          });
-        }
-        body.appendChild(el);
-      });
+    } else {
+      rows = LBSMetrics.topShortage(list, 20);
     }
 
-    renderDetailEnergy();
-    if (ctx.siting_open && ctx.siting_grid_id) {
-      renderSitingPanel(ctx.siting_grid_id);
-    } else {
-      hideSitingPanel();
+    if (!rows.length) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = "<td colspan='3'>当前切片无列表数据</td>";
+      tbody.appendChild(tr);
+      return;
     }
+
+    rows.forEach(function (r) {
+      const tr = document.createElement("tr");
+      if (ctx.selected_zone_id === r.zone_id) tr.className = "sel";
+      const metric =
+        r.gap != null
+          ? "gap " + r.gap.toFixed(1)
+          : "d " + (r.demand != null ? r.demand.toFixed(1) : "—");
+      const pill =
+        r.gap != null && r.gap >= 25
+          ? "hi"
+          : r.gap != null && r.gap >= 10
+            ? "mid"
+            : "lo";
+      tr.innerHTML =
+        "<td>" +
+        (r.name || r.zone_id) +
+        "</td><td>" +
+        (r.zone_type || "—") +
+        "</td><td><span class='pill " +
+        pill +
+        "'>" +
+        metric +
+        "</span> " +
+        (r.action
+          ? "<span class='tag " + r.action + "'>" + r.action + "</span>"
+          : "") +
+        "</td>";
+      tr.addEventListener("click", function () {
+        AppContext.set({ selected_zone_id: r.zone_id, side_panel: "list" });
+        const z = zoneById.get(r.zone_id);
+        if (z) mapApp.focusLatLng(z.centroid_lat, z.centroid_lng, 13);
+      });
+      tbody.appendChild(tr);
+    });
   }
 
-  function renderGovList(ctx) {
-    hideSitingPanel();
-    if (ui.listTitle) ui.listTitle.textContent = "数据质量 · 问题列表";
-    if (ui.listMeta) {
-      ui.listMeta.textContent =
-        "图例标题「数据质量」· 与经营色分色 · 不处理终端 GPS 漂移";
-    }
-    if (ui.formulaBox) {
-      ui.formulaBox.textContent =
-        "治理边界（只读）\n" +
-        "· 处理：主数据入口/命名/桩位元数据、距路网过远\n" +
-        "· 不处理：终端 GPS 漂移 (device_gps_drift)\n" +
-        "· 展示品牌：小李充电 · Synthetic";
-    }
-    if (ui.sceneBadge) {
-      ui.sceneBadge.innerHTML =
-        "scene <code>gov</code> · 图例 <strong>数据质量</strong>";
-    }
-
-    const body = ui.listBody;
-    if (!body) return;
-    body.innerHTML = "";
-
-    const note = document.createElement("div");
-    note.className = "gov-boundary";
-    note.textContent =
-      "不处理终端 GPS 漂移 · 经营色（缺口红）与治理色（紫/琥珀）分图例标题";
-    body.appendChild(note);
-
-    if (!qualityIssues.length) {
-      body.innerHTML += '<div class="meta">暂无问题（实体未加载）。</div>';
-      if (ui.detail) {
-        ui.detail.innerHTML =
-          "<h3>数据质量</h3><p>规则 mock 问题列表；导出可用于周度例会。</p>";
+  function paintRoadPanel(ctx) {
+    const name = $("rd-name");
+    const grade = $("rd-grade");
+    const cong = $("rd-cong");
+    const rctx = $("rd-ctx");
+    const impact = $("rd-impact");
+    const zones = $("rd-zones");
+    if (!ctx.selected_road_id) {
+      if (name) name.textContent = "未选中路段";
+      if (grade) grade.textContent = "点击地图上的道路";
+      if (cong) cong.textContent = "—";
+      if (rctx) rctx.textContent = "—";
+      if (impact) {
+        impact.className = "impact";
+        impact.textContent =
+          "选中路段后，这里用业务语言说明：拥堵如何抬高出行等待、压缩履约时效圈、影响补能到达。";
       }
+      if (zones) zones.textContent = "—";
       return;
     }
-
-    qualityIssues.forEach(function (iss, idx) {
-      const el = document.createElement("div");
-      el.className = "list-item";
-      el.innerHTML =
-        '<div class="title"><span>#' +
-        (idx + 1) +
-        " " +
-        iss.display_name +
-        '</span><span class="tag sev-' +
-        iss.severity +
-        '">' +
-        iss.severity +
-        "</span></div>" +
-        '<div class="vals">' +
-        "<span>" +
-        iss.code +
-        "</span><span>" +
-        iss.title +
-        "</span>" +
-        "<span colspan>图例·数据质量</span></div>";
-      el.addEventListener("click", function () {
-        if (iss.lat != null) {
-          mapApp.map.setView([iss.lat, iss.lng], 14, { animate: true });
-        }
-        if (ui.detail) {
-          ui.detail.innerHTML =
-            "<h3>" +
-            iss.display_name +
-            "</h3>" +
-            "<p><strong>" +
-            iss.severity +
-            "</strong> · " +
-            iss.code +
-            " · " +
-            iss.title +
-            "</p>" +
-            "<p>" +
-            iss.detail +
-            "</p>" +
-            "<p class=\"gov-boundary\">边界：不处理终端 GPS 漂移（out_of_scope=" +
-            iss.out_of_scope +
-            "）</p>" +
-            "<p>entity_id: <code>" +
-            iss.entity_id +
-            "</code></p>";
-        }
-      });
-      body.appendChild(el);
-    });
-
-    if (ui.detail) {
-      ui.detail.innerHTML =
-        "<h3>数据质量说明</h3>" +
-        "<p>共 " +
-        qualityIssues.length +
-        " 条规则 mock 问题（距路网过远、入口缺失等）。</p>" +
-        "<p class=\"gov-boundary\">产品声明：不处理终端 GPS 漂移。</p>" +
-        '<p><button type="button" class="primary" id="btn-export-p0">导出 P0 名单</button></p>';
-      const b = $("btn-export-p0");
-      if (b) b.addEventListener("click", exportP0);
+    // details filled on click via lastRoadDetail
+    if (window.__lastRoadDetail) {
+      const d = window.__lastRoadDetail;
+      if (name) name.textContent = d.name;
+      if (grade) grade.textContent = d.grade;
+      if (cong) cong.textContent = d.congLabel + "（整段一色）";
+      if (rctx)
+        rctx.textContent =
+          "情景" +
+          ctx.scenario +
+          " · " +
+          ctx.weather +
+          " · " +
+          ctx.time_of_day;
+      if (impact) {
+        impact.className =
+          "impact " + (d.cong >= 0.65 ? "bad" : d.cong >= 0.4 ? "warn" : "");
+        impact.textContent = d.impact;
+      }
+      if (zones) zones.textContent = d.zones || "邻近功能区（示意关联）";
     }
   }
 
-  function renderDetailRide() {
-    const ctx = AppContext.get();
-    const box = ui.detail;
+  function paintDetail(ctx) {
+    const box = $("detail-zone");
     if (!box) return;
-    const gid = ctx.selected_grid_id;
-    if (!gid) {
+    if (ctx.storeFocusMode && ctx.storeFocusId) {
       box.innerHTML =
-        "<h3>未选中网格</h3><p>在地图点选格子，或从 TopN 列表进入。</p>";
+        "<h3>单店聚焦</h3><div class='k'>门店</div><div class='v'>" +
+        ctx.storeFocusId +
+        "</div><div class='k'>说明</div><div class='v'>主要渲染该店 + 覆盖圈；其它店已淡化。点「退出聚焦」返回 LOD。</div>" +
+        "<p style='margin-top:8px'><button type='button' id='btn-exit-focus'>退出聚焦</button></p>";
+      const b = $("btn-exit-focus");
+      if (b)
+        b.onclick = function () {
+          AppContext.set({ storeFocusId: null, storeFocusMode: false });
+        };
       return;
     }
-    const g = gridById.get(gid);
-    const c = currentCoeffs("ride");
-    const base = rideIndex && rideIndex.get(gid);
-    const m = LBSMetrics.applyRow(base, c);
-    const corr = corridorText(g);
-    let html =
-      "<h3>" +
-      gid +
-      "</h3>" +
-      "<p>landuse: <strong>" +
-      ((g && g.landuse) || "-") +
-      "</strong> · labels: " +
-      ((g && g.labels && g.labels.join(", ")) || "—") +
-      "</p>";
-    if (!m || !m.ok) {
-      html +=
-        '<div class="err">该格指标不可用' +
-        (m && m.error ? "：" + m.error : "") +
-        "；gap 禁用。</div>";
-    } else {
-      html +=
-        "<p>demand <strong>" +
-        m.demand.toFixed(2) +
-        "</strong> · supply <strong>" +
-        m.supply.toFixed(2) +
-        "</strong> · gap <strong>" +
-        m.gap.toFixed(2) +
-        "</strong></p>";
-      html +=
-        "<p>action: <span class=\"tag " +
-        LBSMetrics.actionFor(m) +
-        '">' +
-        LBSMetrics.actionFor(m) +
-        "</span> · base d/s " +
-        m.demand_base +
-        "/" +
-        m.supply_base +
-        "</p>";
-    }
-    html +=
-      "<h3>" +
-      (corr.title || "路网说明") +
-      "</h3><p>" +
-      (corr.body || "") +
-      "</p>";
-    if (ctx.pack === "overview") {
-      html +=
-        '<p><button type="button" class="primary" id="btn-detail-ride">进入出行（带选中格）</button></p>';
-    }
-    box.innerHTML = html;
-    const b = $("btn-detail-ride");
-    if (b) {
-      b.addEventListener("click", function () {
-        enterRide();
+    if (ctx.selected_zone_id) {
+      const z = zoneById.get(ctx.selected_zone_id);
+      const list = computeZoneList(ctx);
+      const m = list.find(function (x) {
+        return x.zone_id === ctx.selected_zone_id;
       });
-    }
-  }
-
-  function renderDetailEnergy() {
-    const ctx = AppContext.get();
-    const box = ui.detail;
-    if (!box) return;
-    const gid = ctx.selected_grid_id || ctx.siting_grid_id;
-    if (!gid) {
+      const corr = corridorForZone(z);
       box.innerHTML =
-        "<h3>能源网络</h3><p>小李充电缺口列表 →「发起选址」进入 S5 评分（R=1.5km，可解释权重）。</p>";
+        "<h3>" +
+        ((z && z.name) || ctx.selected_zone_id) +
+        "</h3>" +
+        "<div class='k'>类型 / 分级</div><div class='v'>" +
+        ((z && z.zone_type) || "—") +
+        " · " +
+        ((z && z.grade) || "—") +
+        "</div>" +
+        (m && m.ok
+          ? "<div class='k'>demand / supply / gap</div><div class='v'>" +
+            m.demand.toFixed(1) +
+            " / " +
+            (m.supply != null ? m.supply.toFixed(1) : "—") +
+            " / " +
+            (m.gap != null ? m.gap.toFixed(1) : "—") +
+            "</div>"
+          : "") +
+        "<div class='k'>" +
+        (corr.title || "空间说明") +
+        "</div><div class='v'>" +
+        (corr.body || "") +
+        "</div>";
       return;
     }
-    const g = gridById.get(gid);
-    const c = currentCoeffs("chg");
-    const base = chgIndex && chgIndex.get(gid);
-    const m = LBSMetrics.applyRow(base, c);
-    let html =
-      "<h3>" +
-      gid +
-      " · scene=chg</h3>" +
-      "<p>landuse: <strong>" +
-      ((g && g.landuse) || "-") +
-      "</strong></p>";
-    if (!m || !m.ok) {
-      html += '<div class="err">chg 指标不可用</div>';
-    } else {
-      html +=
-        "<p>demand <strong>" +
-        m.demand.toFixed(2) +
-        "</strong> · supply <strong>" +
-        m.supply.toFixed(2) +
-        "</strong> · gap <strong>" +
-        m.gap.toFixed(2) +
-        "</strong></p>";
-    }
-    html +=
-      '<p><button type="button" class="primary" id="btn-detail-siting">发起选址</button></p>';
-    box.innerHTML = html;
-    const b = $("btn-detail-siting");
-    if (b) {
-      b.addEventListener("click", function () {
-        openSiting(gid);
-      });
-    }
+    box.innerHTML =
+      "<h3>提示</h3><div class='v'>① 切换拥堵/等级/业务难度<br/>② 点过江或临港走廊路段<br/>③ 切雨天情景看路色与难度系数<br/>④ 出行包看供需 TopN 并导出</div>";
   }
 
-  function openSiting(gridId) {
-    if (AppContext.get().pack !== "energy") {
-      AppContext.switchPack("energy");
+  function corridorForZone(z) {
+    const rules = (data.corridor && data.corridor.rules) || [];
+    if (!z) {
+      return (
+        rules.find(function (r) {
+          return r.id === "default";
+        }) || { title: "", body: "" }
+      );
     }
-    AppContext.set({
-      siting_open: true,
-      siting_grid_id: gridId,
-      selected_grid_id: gridId
-    });
-    const g = gridById.get(gridId);
-    if (g && mapApp) mapApp.focusGrid(g);
-    setStatus("S5 选址 · R=1.5km · 缺口格 " + gridId);
-  }
-
-  function hideSitingPanel() {
-    if (!ui.sitingPanel) return;
-    ui.sitingPanel.style.display = "none";
-    ui.sitingPanel.hidden = true;
-    ui.sitingPanel.innerHTML = "";
-    lastSiting = null;
-    if (mapApp) mapApp.clearSiting();
-  }
-
-  function renderSitingPanel(gapGridId) {
-    if (!ui.sitingPanel) return;
-    const { list } = computeAllChg();
-    const computedById = new Map();
-    list.forEach(function (x) {
-      if (x && x.grid_id) computedById.set(x.grid_id, x);
-    });
-
-    const cands = LBSMetrics.buildDefaultCandidates(gapGridId, gridById);
-    if (!cands.length) {
-      ui.sitingPanel.style.display = "";
-      ui.sitingPanel.hidden = false;
-      ui.sitingPanel.innerHTML =
-        '<div class="err">无法在该格生成候选（缺网格坐标）。</div>';
-      return;
+    const labels = z.labels || [];
+    for (let i = 0; i < rules.length; i++) {
+      const r = rules[i];
+      if (r.id === "default") continue;
+      if (r.match_labels) {
+        for (let j = 0; j < r.match_labels.length; j++) {
+          if (labels.indexOf(r.match_labels[j]) >= 0) return r;
+        }
+      }
+      if (r.match_landuse && r.match_landuse.indexOf(z.zone_type) >= 0)
+        return r;
     }
-
-    const opts = {
-      gridById: gridById,
-      computedById: computedById,
-      chargers: chargers(),
-      rM: LBSMetrics.SITING_R_M
-    };
-    const results = cands.map(function (c) {
-      return LBSMetrics.scoreCandidate(c, gapGridId, opts);
-    });
-    // attach totals onto markers
-    results.forEach(function (r, i) {
-      cands[i].total = r.total;
-    });
-    const compare = LBSMetrics.compareSiting(results);
-    lastSiting = { gapGridId: gapGridId, results: results, compare: compare };
-
-    const w = LBSMetrics.SITING_WEIGHTS;
-    let html =
-      '<div class="siting-head">' +
-      "<h3>S5 选址 · R=" +
-      LBSMetrics.SITING_R_M / 1000 +
-      "km</h3>" +
-      '<button type="button" id="btn-close-siting" class="btn-ghost">关闭</button>' +
-      "</div>" +
-      '<p class="meta">缺口格 <code>' +
-      gapGridId +
-      "</code> · 邻域近似（格邻域）· 可解释权重非 ML</p>" +
-      '<div class="weight-bar">权重 D ' +
-      w.demand +
-      " · Gap " +
-      w.supply_gap +
-      " · Comp " +
-      w.competition +
-      " · Acc " +
-      w.access +
-      " · 反蚕食 " +
-      w.anti_cannibal +
-      "</div>";
-
-    if (compare) {
-      html +=
-        '<div class="siting-verdict">' +
-        compare.one_liner +
-        "</div>";
-    }
-
-    html += '<div class="siting-compare">';
-    results.forEach(function (r) {
-      const win =
-        compare && compare.winner === r.cand_id ? " win" : "";
-      html +=
-        '<div class="cand-card' +
-        win +
-        '">' +
-        '<div class="cand-title">' +
-        r.label +
-        (win ? " · 推荐" : "") +
-        "</div>" +
-        '<div class="cand-total">' +
-        r.total.toFixed(1) +
-        "</div>" +
-        '<div class="subs">' +
-        subRow("Demand", r.subscores.demand, w.demand) +
-        subRow("SupplyGap", r.subscores.supply_gap, w.supply_gap) +
-        subRow("Competition", r.subscores.competition, w.competition) +
-        subRow("Access", r.subscores.access, w.access) +
-        subRow("反蚕食", r.subscores.anti_cannibal, w.anti_cannibal) +
-        "</div>" +
-        '<p class="reason">' +
-        r.reason_text +
-        "</p>" +
-        "</div>";
-    });
-    html += "</div>";
-    html +=
-      '<p class="meta">节点仅脉冲时优先运营导流；跨节点仍红再重仓建站。天气 rain 不作定址主依据。</p>';
-
-    ui.sitingPanel.style.display = "";
-    ui.sitingPanel.hidden = false;
-    ui.sitingPanel.innerHTML = html;
-
-    const close = $("btn-close-siting");
-    if (close) {
-      close.addEventListener("click", function () {
-        AppContext.set({ siting_open: false, siting_grid_id: null });
-      });
-    }
-
-    if (mapApp) {
-      mapApp.renderSitingCandidates(results, {
-        visible: true,
-        winner: compare && compare.winner
-      });
-    }
-  }
-
-  function subRow(name, val, weight) {
-    const pct = Math.max(0, Math.min(100, val));
     return (
-      '<div class="sub-row"><span>' +
-      name +
-      " ×" +
-      weight +
-      '</span><span>' +
-      val.toFixed(1) +
-      '</span></div>' +
-      '<div class="sub-track"><i style="width:' +
-      pct +
-      '%"></i></div>'
+      rules.find(function (r) {
+        return r.id === "default";
+      }) || { title: "区面", body: z.name || "" }
     );
   }
 
-  function syncControlsFromState() {
-    const ctx = AppContext.get();
-    if (ui.selTod) ui.selTod.value = ctx.time_of_day;
-    if (ui.selNode) ui.selNode.value = ctx.season_or_node;
-    if (ui.selScenario) ui.selScenario.value = ctx.scenario;
-    if (ui.ovMetric) ui.ovMetric.value = ctx.ov_metric || "ride_gap";
-
-    const pack = ctx.pack;
-    if (ui.packOverview) {
-      ui.packOverview.classList.toggle("active", pack === "overview");
-    }
-    if (ui.packRide) ui.packRide.classList.toggle("active", pack === "ride");
-    if (ui.packEnergy) {
-      ui.packEnergy.classList.toggle("active", pack === "energy");
-    }
-    if (ui.packGov) ui.packGov.classList.toggle("active", pack === "gov");
-
-    if (ui.rideLayers) {
-      ui.rideLayers.style.display = pack === "ride" ? "" : "none";
-    }
-    if (ui.energyLayers) {
-      ui.energyLayers.style.display = pack === "energy" ? "" : "none";
-    }
-    if (ui.govLayers) {
-      ui.govLayers.style.display = pack === "gov" ? "" : "none";
-    }
-    if (ui.ovControls) {
-      ui.ovControls.style.display = pack === "overview" ? "" : "none";
-    }
-    if (ui.btnEnterRide) {
-      ui.btnEnterRide.style.display =
-        pack === "overview" || pack === "ride" ? "" : "none";
-      if (pack === "ride") ui.btnEnterRide.style.display = "none";
-    }
-
+  function syncChrome(ctx) {
+    document.querySelectorAll(".nav button[data-pack]").forEach(function (btn) {
+      btn.classList.toggle("active", btn.getAttribute("data-pack") === ctx.active_pack);
+    });
+    if ($("sel-tod")) $("sel-tod").value = ctx.time_of_day;
+    if ($("sel-node")) $("sel-node").value = ctx.season_or_node;
+    if ($("sel-scenario")) $("sel-scenario").value = ctx.scenario;
+    document.querySelectorAll("[data-rm]").forEach(function (b) {
+      b.classList.toggle("on", b.getAttribute("data-rm") === ctx.roadDisplayMode);
+    });
+    document.querySelectorAll("[data-heat]").forEach(function (b) {
+      b.classList.toggle("on", b.getAttribute("data-heat") === ctx.heatRenderMode);
+    });
     const ls = ctx.layer_set || [];
-    if (ui.layerDemand) ui.layerDemand.checked = ls.indexOf("demand") >= 0;
-    if (ui.layerSupply) ui.layerSupply.checked = ls.indexOf("supply") >= 0;
-    if (ui.layerGap) {
-      ui.layerGap.checked = ls.indexOf("gap") >= 0;
-      ui.layerGap.disabled = !!gapDisabledReason;
+    if ($("ly-road")) $("ly-road").checked = ls.indexOf("roads") >= 0 || ls.indexOf("road_cong") >= 0;
+    if ($("ly-zone")) $("ly-zone").checked = ls.indexOf("zones") >= 0;
+    if ($("ly-heat")) $("ly-heat").checked = ls.indexOf("heat") >= 0;
+    if ($("ly-poi"))
+      $("ly-poi").checked =
+        ls.indexOf("stores") >= 0 || ls.indexOf("chargers") >= 0;
+    document.querySelectorAll(".side-tabs button").forEach(function (b) {
+      b.classList.toggle("on", b.getAttribute("data-panel") === ctx.side_panel);
+    });
+    if ($("panel-list"))
+      $("panel-list").classList.toggle("hidden", ctx.side_panel !== "list");
+    if ($("panel-road"))
+      $("panel-road").classList.toggle("hidden", ctx.side_panel !== "road");
+    if ($("scene-badge")) {
+      $("scene-badge").innerHTML =
+        "scene <code>" +
+        ctx.active_scene +
+        "</code> · " +
+        ctx.active_pack;
+    }
+    // legend
+    const lt = $("legend-title");
+    const lb = $("legend-body");
+    if (lt && lb) {
+      if (ctx.roadDisplayMode === "grade") {
+        lt.textContent = "图例 · 道路等级";
+        lb.innerHTML =
+          "<span><i class='sw' style='background:#38bdf8'></i>快速/高速</span>" +
+          "<span><i class='sw' style='background:#60a5fa'></i>主干</span>" +
+          "<span><i class='sw' style='background:#94a3b8'></i>次干</span>" +
+          "<span><i class='sw' style='background:#64748b'></i>三级</span>";
+      } else if (ctx.roadDisplayMode === "biz") {
+        lt.textContent = "图例 · 业务难度";
+        lb.innerHTML =
+          "<span><i class='sw' style='background:#3dd68c'></i>易匹配</span>" +
+          "<span><i class='sw' style='background:#e6c07b'></i>承压</span>" +
+          "<span><i class='sw' style='background:#f07178'></i>高难度</span>";
+      } else {
+        lt.textContent = "图例 · 拥堵（整段 way）";
+        lb.innerHTML =
+          "<span><i class='sw' style='background:#3dd68c'></i>畅通</span>" +
+          "<span><i class='sw' style='background:#e6c07b'></i>缓行</span>" +
+          "<span><i class='sw' style='background:#f07178'></i>拥堵</span>";
+      }
     }
   }
 
-  function enterRide() {
-    AppContext.switchPack("ride");
-    setStatus("已进入出行包 · scene=ride（继承区域/时间/选中格）");
+  let suppressCongWrite = false;
+
+  function onState(ctx) {
+    if (!suppressCongWrite) {
+      // refresh derived congestion without infinite loop
+      const sc = sceneForPack(ctx.active_pack);
+      const bundle = LBSMetrics.difficultyBundle(
+        data && data.congestion,
+        ctx.weather,
+        ctx.time_of_day,
+        sc
+      );
+      const share = Math.min(0.95, Math.max(0.05, (bundle.congestion_index || 0.5) * 0.9));
+      const narrative = buildNarrative(ctx, bundle.difficulty, share);
+      const prev = ctx.congestion || {};
+      if (
+        prev.difficulty_coeff !== bundle.difficulty ||
+        prev.share_blocked !== share ||
+        prev.narrative !== narrative
+      ) {
+        suppressCongWrite = true;
+        AppContext.set({
+          congestion: {
+            share_blocked: share,
+            difficulty_coeff: bundle.difficulty,
+            narrative: narrative
+          }
+        });
+        suppressCongWrite = false;
+        return; // will re-enter
+      }
+    }
+    syncChrome(ctx);
+    paintStory(ctx);
+    paintMap(ctx);
+    paintList(ctx);
+    paintRoadPanel(ctx);
+    paintDetail(ctx);
   }
 
-  function enterEnergy() {
-    AppContext.switchPack("energy");
-    setStatus("已进入能源网络 · scene=chg · 小李充电");
-  }
-
-  function enterGov() {
-    AppContext.switchPack("gov");
-    setStatus("已进入数据治理 · 图例「数据质量」· 不处理终端 GPS 漂移");
+  function bindUi() {
+    document.querySelectorAll(".nav button[data-pack]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        AppContext.switchPack(btn.getAttribute("data-pack"));
+        setStatus("已切换 · " + (PACK_LABEL[btn.getAttribute("data-pack")] || ""));
+      });
+    });
+    if ($("sel-tod"))
+      $("sel-tod").onchange = function () {
+        AppContext.set({ time_of_day: $("sel-tod").value });
+      };
+    if ($("sel-node"))
+      $("sel-node").onchange = function () {
+        AppContext.set({ season_or_node: $("sel-node").value });
+      };
+    if ($("sel-scenario"))
+      $("sel-scenario").onchange = function () {
+        AppContext.applyScenario($("sel-scenario").value);
+      };
+    document.querySelectorAll("[data-rm]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        AppContext.set({ roadDisplayMode: b.getAttribute("data-rm") });
+      });
+    });
+    document.querySelectorAll("[data-heat]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        AppContext.set({ heatRenderMode: b.getAttribute("data-heat") });
+      });
+    });
+    function layerPatch() {
+      const ctx = AppContext.get();
+      const set = ["basemap"];
+      if ($("ly-road") && $("ly-road").checked) {
+        set.push("roads");
+        set.push("road_cong");
+      }
+      set.push("water");
+      if ($("ly-zone") && $("ly-zone").checked) set.push("zones");
+      if ($("ly-heat") && $("ly-heat").checked) set.push("heat");
+      if ($("ly-poi") && $("ly-poi").checked) {
+        if (ctx.active_pack === "energy") set.push("chargers");
+        else set.push("stores");
+      }
+      AppContext.set({ layer_set: set });
+    }
+    ["ly-road", "ly-zone", "ly-heat", "ly-poi"].forEach(function (id) {
+      if ($(id)) $(id).onchange = layerPatch;
+    });
+    document.querySelectorAll(".side-tabs button").forEach(function (b) {
+      b.addEventListener("click", function () {
+        AppContext.set({ side_panel: b.getAttribute("data-panel") });
+      });
+    });
+    if ($("btn-export")) $("btn-export").onclick = exportSnapshot;
+    if ($("btn-story-river"))
+      $("btn-story-river").onclick = function () {
+        AppContext.applyScenario("A");
+        AppContext.set({
+          time_of_day: "wd_pm_peak",
+          roadDisplayMode: "cong",
+          active_pack: "overview"
+        });
+        AppContext.switchPack("overview");
+        mapApp.focusLatLng(31.239, 121.495, 13);
+        setStatus("叙事镜头 · 晚高峰过江");
+      };
+    if ($("btn-story-rain"))
+      $("btn-story-rain").onclick = function () {
+        AppContext.switchPack("ride");
+        AppContext.applyScenario("B");
+        AppContext.set({ time_of_day: "wd_pm_peak", roadDisplayMode: "cong" });
+        setStatus("叙事镜头 · 雨天出行");
+      };
+    if ($("btn-story-hub"))
+      $("btn-story-hub").onclick = function () {
+        AppContext.switchPack("fulfillment");
+        AppContext.applyScenario("A");
+        mapApp.focusLatLng(31.194, 121.32, 13);
+        setStatus("叙事镜头 · 虹桥脉冲");
+      };
   }
 
   function exportSnapshot() {
     const ctx = AppContext.get();
-    if (ctx.pack === "gov") {
-      exportP0();
-      return;
-    }
-    if (ctx.pack === "energy") {
-      exportEnergySnap();
-      return;
-    }
-    const { list, gapDisabledReason: gdr } = computeAllRide();
-    const top = gdr ? [] : LBSMetrics.topShortage(list, 50);
+    const list = computeZoneList(ctx);
+    const top = LBSMetrics.topShortage(list, 50);
     const snapId =
       "snap_" +
       new Date().toISOString().replace(/[:.]/g, "-") +
       "_" +
-      (ctx.scenario || "A");
+      ctx.scenario;
     AppContext.set({ snapshot_id: snapId });
     const payload = {
       snapshot_id: snapId,
       exported_at: new Date().toISOString(),
       synthetic: true,
-      brand_note: "小李* placeholder; no employer site names",
+      brand_note: "小李* · no employer site names",
       formula: LBSMetrics.FORMULA_RIDE,
-      gap_disabled: gdr || null,
       context: AppContext.exportContext(),
       rows: top.map(function (r) {
-        const g = gridById.get(r.grid_id) || {};
         return {
-          grid_id: r.grid_id,
+          zone_id: r.zone_id,
+          name: r.name,
           demand: round2(r.demand),
-          supply: round2(r.supply),
-          gap: round2(r.gap),
+          supply: r.supply != null ? round2(r.supply) : null,
+          gap: r.gap != null ? round2(r.gap) : null,
           action: r.action,
-          landuse: g.landuse || null,
-          labels: g.labels || []
+          zone_type: r.zone_type,
+          difficulty: r.difficulty
         };
       })
     };
-    downloadJson(payload, snapId + ".json");
-    setStatus("已导出 " + snapId + ".json");
-  }
-
-  function exportEnergySnap() {
-    const ctx = AppContext.get();
-    const { list, gapDisabledReason: gdr } = computeAllChg();
-    const top = gdr ? [] : LBSMetrics.topShortage(list, 30);
-    const snapId =
-      "snap_chg_" + new Date().toISOString().replace(/[:.]/g, "-");
-    const payload = {
-      snapshot_id: snapId,
-      exported_at: new Date().toISOString(),
-      synthetic: true,
-      scene: "chg",
-      brand: "小李充电",
-      formula: LBSMetrics.FORMULA_CHG,
-      siting_weights: LBSMetrics.SITING_WEIGHTS,
-      siting_R_m: LBSMetrics.SITING_R_M,
-      siting: lastSiting,
-      context: AppContext.exportContext(),
-      rows: top.map(function (r) {
-        return {
-          grid_id: r.grid_id,
-          demand: round2(r.demand),
-          supply: round2(r.supply),
-          gap: round2(r.gap)
-        };
-      })
-    };
-    downloadJson(payload, snapId + ".json");
-    setStatus("已导出能源 snapshot " + snapId + ".json");
-  }
-
-  function exportP0() {
-    const p0 = qualityIssues.filter(function (x) {
-      return x.severity === "P0";
-    });
-    const snapId =
-      "p0_quality_" + new Date().toISOString().replace(/[:.]/g, "-");
-    const payload = {
-      snapshot_id: snapId,
-      exported_at: new Date().toISOString(),
-      legend: "数据质量",
-      boundary: "不处理终端 GPS 漂移",
-      brand: "小李充电",
-      synthetic: true,
-      count: p0.length,
-      issues: p0
-    };
-    downloadJson(payload, snapId + ".json");
-    setStatus("已导出 P0 名单 " + p0.length + " 条");
-  }
-
-  function downloadJson(obj, filename) {
-    const blob = new Blob([JSON.stringify(obj, null, 2)], {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: "application/json"
     });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = filename;
+    a.download = snapId + ".json";
     document.body.appendChild(a);
     a.click();
     setTimeout(function () {
       URL.revokeObjectURL(a.href);
       a.remove();
     }, 0);
+    setStatus("已导出 " + a.download);
   }
 
   function round2(n) {
     return Math.round(n * 100) / 100;
   }
 
-  function onStateChange() {
-    rebuildRideIndex();
-    rebuildChgIndex();
-    syncControlsFromState();
-    paintMap();
-    renderList();
-  }
-
-  function bindUi() {
-    if (ui.packOverview) {
-      ui.packOverview.addEventListener("click", function () {
-        AppContext.switchPack("overview");
-      });
-    }
-    if (ui.packRide) {
-      ui.packRide.addEventListener("click", function () {
-        enterRide();
-      });
-    }
-    if (ui.packEnergy) {
-      ui.packEnergy.addEventListener("click", enterEnergy);
-    }
-    if (ui.packGov) {
-      ui.packGov.addEventListener("click", enterGov);
-    }
-    if (ui.btnEnterRide) {
-      ui.btnEnterRide.addEventListener("click", enterRide);
-    }
-    if (ui.btnExport) {
-      ui.btnExport.addEventListener("click", exportSnapshot);
-    }
-    if (ui.selTod) {
-      ui.selTod.addEventListener("change", function () {
-        AppContext.set({ time_of_day: ui.selTod.value });
-      });
-    }
-    if (ui.selNode) {
-      ui.selNode.addEventListener("change", function () {
-        AppContext.set({ season_or_node: ui.selNode.value });
-      });
-    }
-    if (ui.selScenario) {
-      ui.selScenario.addEventListener("change", function () {
-        AppContext.applyScenario(ui.selScenario.value);
-      });
-    }
-    if (ui.ovMetric) {
-      ui.ovMetric.addEventListener("change", function () {
-        AppContext.set({ ov_metric: ui.ovMetric.value });
-      });
-    }
-    function layerChange() {
-      const set = [];
-      if (ui.layerDemand && ui.layerDemand.checked) set.push("demand");
-      if (ui.layerSupply && ui.layerSupply.checked) set.push("supply");
-      if (ui.layerGap && ui.layerGap.checked) {
-        if (gapDisabledReason) {
-          ui.layerGap.checked = false;
-          showBanner("gap 已禁用：" + gapDisabledReason, true);
-        } else set.push("gap");
-      }
-      AppContext.set({ layer_set: set.length ? set : ["demand", "supply"] });
-      if (mapApp && ui.layerRoads) mapApp.showRoads(ui.layerRoads.checked);
-    }
-    [ui.layerDemand, ui.layerSupply, ui.layerGap].forEach(function (el) {
-      if (el) el.addEventListener("change", layerChange);
+  function nearestZones(latlng, n) {
+    if (!latlng) return [];
+    const arr = [];
+    zoneById.forEach(function (z) {
+      const d =
+        Math.pow(z.centroid_lat - latlng[0], 2) +
+        Math.pow(z.centroid_lng - latlng[1], 2);
+      arr.push({ z: z, d: d });
     });
-    if (ui.layerRoads) {
-      ui.layerRoads.addEventListener("change", function () {
-        if (mapApp) mapApp.showRoads(ui.layerRoads.checked);
-      });
-    }
-    function energyLayerChange() {
-      paintMap();
-    }
-    [ui.layerChgGap, ui.layerChargers, ui.layerRoadsE].forEach(function (el) {
-      if (el) el.addEventListener("change", energyLayerChange);
+    arr.sort(function (a, b) {
+      return a.d - b.d;
     });
-    [ui.layerQuality, ui.layerChargersG, ui.layerRoadsG].forEach(function (el) {
-      if (el) el.addEventListener("change", energyLayerChange);
+    return arr.slice(0, n || 3).map(function (x) {
+      return x.z.name;
     });
   }
 
   async function boot() {
     setStatus("加载数据…");
     bindUi();
-    AppContext.subscribe(function () {
-      onStateChange();
+    const amapKey = (cfg().amapKey || "").trim();
+    mapApp = LBSMap.createMapApp("map", {
+      amapKey: amapKey,
+      onZoom: function (z) {
+        const lod = LBSMetrics.lodFromZoom(z);
+        if (AppContext.get().lodLevel !== lod) {
+          AppContext.set({ lodLevel: lod });
+        } else {
+          // still rebuild roads weights
+          const ctx = AppContext.get();
+          const bundle = LBSMetrics.difficultyBundle(
+            data && data.congestion,
+            ctx.weather,
+            ctx.time_of_day,
+            sceneForPack(ctx.active_pack)
+          );
+          mapApp.rebuildRoads({
+            mode: ctx.roadDisplayMode,
+            lod: lod,
+            cityIndex: bundle.congestion_index,
+            weather: ctx.weather,
+            tod: ctx.time_of_day,
+            difficulty: bundle.difficulty,
+            show: true
+          });
+        }
+      }
     });
 
-    const amapKey = (cfg().amapKey || "").trim();
-    mapApp = LBSMap.createMapApp("map", { amapKey: amapKey });
-    mapApp.setOnSelect(function (gid) {
-      AppContext.set({ selected_grid_id: gid });
-    });
+    if (!amapKey) {
+      showBanner(
+        "未配置高德 Key：fallback 底图。复制 config.local.example.js → config.local.js 填写 amapKey。",
+        true
+      );
+    }
 
     try {
-      if (location.protocol === "file:") {
-        throw new Error("file-protocol");
-      }
-      data = await LBSData.loadAll({ roads: true });
+      data = await LBSData.loadCore();
     } catch (e) {
       console.error(e);
+      showBanner(
+        "无法加载 public/data/*。请 npm run copy:public-data 后 npm run serve。",
+        true
+      );
       setStatus("数据加载失败");
-      var tip =
-        location.protocol === "file:" || (e && e.message === "file-protocol")
-          ? "请勿双击 HTML。在仓根运行 start-demo.bat 或 npm run serve，浏览器打开 http://127.0.0.1:4173/"
-          : "无法加载 data/*（当前页 " +
-            location.href +
-            "）。在仓根执行 npm run copy:public-data 后，用静态服务打开 public/（http://127.0.0.1:4173/），不要 file://。";
-      showBanner(tip, true);
       return;
     }
 
-    (data.grids.grids || []).forEach(function (g) {
-      gridById.set(g.grid_id, g);
+    zonesGeo = data.zonesGeo;
+    const zlist =
+      (data.zonesMeta && data.zonesMeta.zones) ||
+      (zonesGeo &&
+        zonesGeo.features &&
+        zonesGeo.features.map(function (f) {
+          return f.properties;
+        })) ||
+      [];
+    zlist.forEach(function (z) {
+      if (z && z.zone_id) zoneById.set(z.zone_id, z);
     });
 
-    qualityIssues = LBSMetrics.mockQualityIssues(chargers(), data.grids);
-
-    if (data.manifest && data.manifest.bbox_gcj) {
-      mapApp.fitToBbox(data.manifest.bbox_gcj);
-      mapApp.map.setView([31.23, 121.47], 11);
+    // QC banner
+    const qcOk =
+      data.manifest &&
+      (data.manifest.roads_qc_pass === true ||
+        data.manifest.road_features > 1000);
+    if (!qcOk) {
+      showBanner("路网分析状态未知：请确认 roads QC。仍可浏览底图与区面。", true);
     }
 
-    if (data.roads) {
-      mapApp.setRoads(data.roads);
-      // B2: default show roads on load (overview/ride checkboxes default checked)
-      mapApp.showRoads(true);
-    }
+    mapApp.setWater(data.water);
+    mapApp.setZones(zonesGeo, { showType: true });
+    if (data.roads) mapApp.setRoads(data.roads);
+    mapApp.map.setView([31.23, 121.48], 12);
 
-    if (ui.synthNote) {
-      ui.synthNote.textContent =
-        data.manifest && data.manifest.synthetic
-          ? "经营指标 Synthetic · 展示品牌 小李* · 无雇主站名"
-          : "";
-    }
+    mapApp.setHandlers({
+      onRoadClick: function (id, props, cong, _f, ll) {
+        const ctx = AppContext.get();
+        const bundle = LBSMetrics.difficultyBundle(
+          data.congestion,
+          ctx.weather,
+          ctx.time_of_day,
+          sceneForPack(ctx.active_pack)
+        );
+        const hw = props.highway || "";
+        const gradeLabel = hw + (props.ref ? " / " + props.ref : "");
+        const band = cong < 0.4 ? "畅通" : cong < 0.65 ? "缓行" : "拥堵";
+        const names = nearestZones(ll || [31.23, 121.48], 3);
+        window.__lastRoadDetail = {
+          name: props.name || props.ref || "osm:" + id,
+          grade: gradeLabel,
+          cong: cong,
+          congLabel: band + " · index " + cong.toFixed(2),
+          impact: LBSMetrics.roadImpactCopy(
+            cong,
+            gradeLabel,
+            bundle.difficulty,
+            ctx.active_pack
+          ),
+          zones: names.join("、") || "—"
+        };
+        AppContext.set({
+          selected_road_id: id,
+          side_panel: "road"
+        });
+        mapApp.highlightRoad(id);
+      },
+      onZoneClick: function (zid) {
+        AppContext.set({ selected_zone_id: zid, side_panel: "list" });
+      },
+      onStoreClick: function (ent) {
+        if (AppContext.get().active_pack === "o2o" || AppContext.get().active_pack === "fulfillment") {
+          AppContext.switchPack("o2o");
+          AppContext.set({
+            storeFocusId: ent.entity_id,
+            storeFocusMode: true,
+            selected_entity: ent.entity_id
+          });
+        }
+      }
+    });
+
+    AppContext.subscribe(function (ctx) {
+      if (!data) return;
+      onState(ctx);
+    });
 
     AppContext.applyScenario("A");
     AppContext.switchPack("overview");
+    // force initial paint after switch
+    onState(AppContext.get());
+
+    if ($("synth-note")) {
+      $("synth-note").textContent =
+        data.manifest && data.manifest.synthetic
+          ? "Synthetic · 小李* · 无雇主站名"
+          : "Synthetic";
+    }
     setStatus(
-      "就绪 · grids " +
-        ((data.grids && data.grids.count) || gridById.size) +
-        " · ride " +
-        ((data.metrics_ride && data.metrics_ride.count) || "?") +
-        " · chg " +
-        ((data.metrics_chg && data.metrics_chg.count) || "?") +
-        " · 小李站 " +
-        chargers().length +
-        " · 高德底图"
+      "就绪 · zones " +
+        zoneById.size +
+        " · roads " +
+        ((data.roads && data.roads.features && data.roads.features.length) || 0) +
+        " · " +
+        (amapKey ? "高德底图" : "fallback 底图")
     );
   }
 

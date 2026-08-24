@@ -48,29 +48,28 @@ Frozen field names live under `contracts/`. UI reads only `public/data/*` (copie
    - If you already have `data/processed/*`: `npm run copy:public-data`
    - Full pipeline: `npm run build`  
      Optional first: `npm run download:osm` (writes gitignored raw OSM).
-8. `npm run serve` → http://localhost:4173  
+8. `npm run serve` → http://localhost:4173 → **Ctrl+F5**
 9. No hard-coded machine paths in `scripts/` / `public/`. Keys only in gitignored local files.
 10. Without `amapKey`, shell uses a fallback basemap + banner (does not crash). GCJ roads may look slightly offset vs WGS tiles — expected.
 
+**UI (PRD 05.1):** map-first — basemap + water + roads (cong/grade/biz) + zone faces + poly heat. All six tabs clickable. No 1km grid hero.
+
 ---
 
-## Demo main path (Must · ~3–5 min)
+## Demo main path (Must · ~3–5 min · 05.1)
 
 Full talk track: [`docs/demo-script.md`](docs/demo-script.md)
 
 | Step | UI |
 |------|-----|
-| 1 | Open Overview — grid + ride_gap |
-| 2 | Enter **出行** — inherit region/time/selection |
-| 3 | demand + supply + gap on together |
-| 4 | TopN list + read-only formula |
-| 5 | Scenario **B · rain** — gap worsens via coefficients (not a live A/B experiment) |
-| 6 | Toggle **路网** — corridor / 临港 copy in side panel |
-| 7 | **导出 snapshot** — JSON download |
+| 1 | Open **总览** — 路网默认开 + 区面类型色 + 面热力 + 黄浦江（无 1km 糊格） |
+| 2 | 路网模式：拥堵 / 等级 / 业务难度；**点路段** → 右侧「路段分析」 |
+| 3 | 情景 **B · 雨** — 路色更堵 + 叙事条难度系数升 |
+| 4 | **出行** — zone demand×supply÷difficulty、TopN、只读公式 |
+| 5 | **履约 / 到店 / 能源** — 最小可讲（门店聚焦、站网） |
+| 6 | **导出 snapshot** — context + rows JSON |
 
-**Should (WS-E):** 能源网络 → 小李充电 + chg gap → **发起选址** (S5 scores) → 数据治理 (quality colors; no terminal-GPS claims).
-
-Acceptance checklists: `docs/acceptance-main-path.md`, `docs/acceptance-side-path.md`.
+Acceptance: `docs/acceptance-main-path.md`.
 
 ---
 

@@ -3,41 +3,31 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LBS-Master · 上海域中台沙盘</title>
+  <title>LBS-Master · 业务地图台</title>
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <link rel="stylesheet" href="css/app.css" />
-  <script>
-    // CDN fallback if local leaflet CSS 404
-    (function () {
-      var ok = false;
-      try {
-        var sheets = document.styleSheets;
-        /* local path attempted above */
-      } catch (e) {}
-    })();
-  </script>
 </head>
 <body>
   <div id="app">
+    <div id="banner-key" class="banner-key" role="status"></div>
+
     <header class="topbar">
-      <div class="brand">LBS-Master <span>上海域 · 可移植沙盘</span></div>
+      <h1 class="brand">LBS-Master <span>业务地图 · 路网可分析</span></h1>
       <nav class="nav" aria-label="业务包">
-        <button type="button" id="nav-overview" class="active">区域总览</button>
-        <button type="button" disabled title="WS-E/占位">到店增长</button>
-        <button type="button" id="nav-ride">出行</button>
-        <button type="button" disabled title="Could">履约</button>
-        <button type="button" id="nav-energy">能源网络</button>
-        <button type="button" id="nav-gov">数据治理</button>
+        <button type="button" data-pack="overview" class="active">区域总览</button>
+        <button type="button" data-pack="o2o">到店</button>
+        <button type="button" data-pack="ride">出行</button>
+        <button type="button" data-pack="fulfillment">履约</button>
+        <button type="button" data-pack="energy">能源</button>
+        <button type="button" data-pack="governance">治理</button>
       </nav>
-      <span class="badge-scene" id="scene-badge">scene <code>overview</code></span>
+      <span class="badge" id="scene-badge">scene <code>overview</code></span>
       <span class="synth-tag" id="synth-note">Synthetic</span>
     </header>
 
-    <div class="global-controls">
+    <div class="ctx">
       <label>区域
-        <select disabled title="MVP 固定上海">
-          <option selected>上海（含临港）</option>
-        </select>
+        <select disabled><option>上海（含临港）</option></select>
       </label>
       <label>日内
         <select id="sel-tod">
@@ -54,109 +44,136 @@
       </label>
       <label>情景
         <select id="sel-scenario">
-          <option value="A" selected>A · clear</option>
-          <option value="B">B · rain</option>
+          <option value="A" selected>A · 晴</option>
+          <option value="B">B · 雨</option>
         </select>
       </label>
+      <button type="button" class="primary" id="btn-story-river">叙事·晚高峰过江</button>
+      <button type="button" id="btn-story-rain">叙事·雨天出行</button>
+      <button type="button" id="btn-story-hub">叙事·虹桥履约</button>
       <button type="button" class="primary" id="btn-export">导出 snapshot</button>
-      <button type="button" id="btn-enter-ride">进入出行</button>
+      <span style="margin-left:auto;font-size:11px;">点<strong style="color:var(--text)">道路</strong>或<strong style="color:var(--text)">区面</strong></span>
+    </div>
+
+    <div class="story" id="story">
+      <span class="story-tag">NARRATIVE</span>
+      <div class="story-body">
+        <div class="t" id="story-t">总览：路网是地面业务的地板</div>
+        <div class="d" id="story-d">默认底图 + 路网拥堵 + 类型区面 + 面热力。点路段 → 右侧「路段分析」讲业务难度。</div>
+      </div>
+      <div class="story-metrics">
+        <div><b id="sm-obj">—</b>选中对象</div>
+        <div><b id="sm-cong">—</b>拥堵路占比</div>
+        <div><b id="sm-diff">×1.0</b>业务难度系数</div>
+      </div>
     </div>
 
     <div class="main">
-      <div class="map-wrap">
-        <div id="banner" class="banner" role="status"></div>
-        <div class="toolbar">
-          <div class="card" id="ov-controls">
-            <strong>总览 metric</strong>
+      <div class="map-pane">
+        <div id="map" role="application" aria-label="地图"></div>
+        <div class="hint-click">点击彩色<strong>道路</strong>→ 路段分析</div>
+
+        <div class="map-float">
+          <div class="card">
+            <strong>路网分析显示</strong>
             <div class="row">
-              <label>指标
-                <select id="ov-metric">
-                  <option value="ride_gap" selected>ride_gap</option>
-                  <option value="ride_demand">ride_demand</option>
-                  <option value="ride_supply">ride_supply</option>
-                </select>
-              </label>
+              <button type="button" class="chip on" data-rm="cong">拥堵</button>
+              <button type="button" class="chip" data-rm="grade">等级/车速</button>
+              <button type="button" class="chip" data-rm="biz">业务难度</button>
             </div>
-            <div class="legend">
-              <span><i class="swatch" style="background:#ef4444"></i>缺口高</span>
-              <span><i class="swatch" style="background:#38bdf8"></i>供给余</span>
+            <div style="margin-top:6px;font-size:10px;line-height:1.35">
+              整段 way 一色 · 不分上下行 · 随高峰/雨天变
             </div>
           </div>
-          <div class="card" id="ride-layers" style="display:none">
-            <strong>出行图层</strong>
-            <div class="row">
-              <label><input type="checkbox" id="layer-demand" checked /> demand</label>
-              <label><input type="checkbox" id="layer-supply" checked /> supply</label>
-              <label><input type="checkbox" id="layer-gap" checked /> gap</label>
-              <label><input type="checkbox" id="layer-roads" checked /> 路网</label>
-            </div>
-            <div class="legend">填色优先 gap；demand/supply 同屏契约 · 无 supply 则禁用 gap</div>
+          <div class="card">
+            <strong>图层</strong>
+            <label><input type="checkbox" id="ly-road" checked /> 路网</label>
+            <label><input type="checkbox" id="ly-zone" checked /> 商圈/功能区</label>
+            <label><input type="checkbox" id="ly-heat" checked /> 区域热力</label>
+            <label><input type="checkbox" id="ly-poi" /> 站/店实体</label>
           </div>
-          <div class="card" id="energy-layers" style="display:none">
-            <strong>能源网络 · 经营色</strong>
+          <div class="card">
+            <strong>区域热力形态 <span style="font-weight:400;color:var(--muted)">同指标</span></strong>
             <div class="row">
-              <label><input type="checkbox" id="layer-chg-gap" checked /> chg 缺口</label>
-              <label><input type="checkbox" id="layer-chargers" checked /> 小李充电</label>
-              <label><input type="checkbox" id="layer-roads-e" checked /> 路网</label>
+              <button type="button" class="chip on" data-heat="poly">区面</button>
+              <button type="button" class="chip" data-heat="grid">细格</button>
+              <button type="button" class="chip" data-heat="kde">核密度</button>
             </div>
-            <div class="legend">
-              <span><i class="swatch" style="background:#ef4444"></i>缺口高</span>
-              <span><i class="swatch" style="background:#22c55e"></i>小李充电点</span>
-            </div>
-            <div class="legend muted">scene=chg · Synthetic · 无雇主站名</div>
-          </div>
-          <div class="card" id="gov-layers" style="display:none">
-            <strong>数据质量</strong>
-            <div class="row">
-              <label><input type="checkbox" id="layer-quality" checked /> 问题点</label>
-              <label><input type="checkbox" id="layer-chargers-g" checked /> 小李充电</label>
-              <label><input type="checkbox" id="layer-roads-g" checked /> 路网</label>
-            </div>
-            <div class="legend legend-title">图例 · 数据质量（≠ 经营色）</div>
-            <div class="legend">
-              <span><i class="swatch" style="background:#a855f7"></i>P0 主数据</span>
-              <span><i class="swatch" style="background:#f59e0b"></i>P1 入口/路网</span>
-            </div>
-            <div class="gov-boundary">不处理终端 GPS 漂移 · 仅主数据/入口类问题</div>
           </div>
         </div>
-        <div id="map" role="application" aria-label="地图"></div>
+
+        <div class="map-float bottom">
+          <div class="card">
+            <strong id="legend-title">图例 · 拥堵（整段 way）</strong>
+            <div class="legend-line" id="legend-body">
+              <span><i class="sw" style="background:#3dd68c"></i>畅通</span>
+              <span><i class="sw" style="background:#e6c07b"></i>缓行</span>
+              <span><i class="sw" style="background:#f07178"></i>拥堵</span>
+            </div>
+            <div class="legend-line" style="margin-top:6px">
+              <span><i class="sw box" style="background:#7C3AED"></i>商业</span>
+              <span><i class="sw box" style="background:#F5F0E8"></i>住宅</span>
+              <span><i class="sw box" style="background:#93C5FD"></i>工业</span>
+              <span><i class="sw box" style="background:#0D9488"></i>办公</span>
+              <span><i class="sw box" style="background:#FBBF24"></i>枢纽</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <aside class="side">
         <div class="side-head">
-          <h2 id="list-title">总览 · 缺口 TopN</h2>
-          <div class="meta" id="list-meta">加载中…</div>
-          <div class="formula" id="formula-box" title="只读公式">gap = demand - supply (scene=ride)</div>
+          <h2 id="side-title">分析面板</h2>
+          <div class="meta" id="side-meta">业务列表 / 路段分析</div>
+          <div class="formula" id="formula-box">gap = demand - supply (scene=ride)</div>
         </div>
-        <div class="side-body">
-          <div id="list-body"></div>
-          <div class="detail" id="detail">
-            <h3>详情</h3>
-            <p>点选网格查看 demand × supply 与路网说明。</p>
+        <div class="side-tabs">
+          <button type="button" class="on" data-panel="list">业务列表</button>
+          <button type="button" data-panel="road">路段分析</button>
+        </div>
+        <div class="list-wrap" id="panel-list">
+          <table>
+            <thead><tr><th>名称</th><th>类型</th><th>指标</th></tr></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+        <div class="list-wrap hidden" id="panel-road">
+          <div class="detail" style="border:none;max-height:none">
+            <h3 id="rd-name">未选中路段</h3>
+            <div class="k">道路等级</div>
+            <div class="v" id="rd-grade">点击地图上的道路</div>
+            <div class="k">当前拥堵（整段）</div>
+            <div class="v" id="rd-cong">—</div>
+            <div class="k">情景</div>
+            <div class="v" id="rd-ctx">—</div>
+            <div class="impact" id="rd-impact">
+              选中路段后说明：拥堵如何抬高出行等待、压缩履约时效圈。
+            </div>
+            <div class="k" style="margin-top:10px">关联区域</div>
+            <div class="v" id="rd-zones">—</div>
           </div>
-          <div id="siting-panel" class="siting-panel" style="display:none" hidden></div>
+        </div>
+        <div class="detail" id="detail-zone">
+          <h3>提示</h3>
+          <div class="v">打开即地图感 · 禁止 1km 糊格主视觉</div>
         </div>
       </aside>
     </div>
 
-    <footer class="footer">
+    <footer class="foot">
       <span id="status">启动中…</span>
-      <span>© OpenStreetMap contributors · 高德 Key 仅本地 config</span>
-      <span id="scene-formula"></span>
+      <span>© OpenStreetMap contributors · 高德仅底图 Key 本地 · Synthetic</span>
+      <span>PRD 05.1 · 路网=线分析 · 热力=面 · 情景联动</span>
     </footer>
   </div>
 
-  <!-- config: example always; local overrides if present -->
   <script src="config.local.example.js"></script>
   <script src="config.local.js" onerror="/* optional */"></script>
-
   <script src="vendor/leaflet/leaflet.js"></script>
   <script>
-    // CDN fallback if local Leaflet failed
     if (typeof L === "undefined") {
-      document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>');
       document.write('<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />');
+      document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>');
     }
   </script>
   <script src="js/app-context.js"></script>
