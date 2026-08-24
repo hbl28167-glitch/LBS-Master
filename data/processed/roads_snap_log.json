@@ -1,0 +1,10 @@
+{
+  "built_at": "2026-08-24T08:43:22.298Z",
+  "input": "data\\processed\\roads_gcj.pre.geojson",
+  "output": "data\\processed\\roads_gcj.geojson",
+  "eps_m": 2,
+  "tip_count": 113156,
+  "merged_clusters": 45302,
+  "tips_moved": 180,
+  "features_touched": 159
+}

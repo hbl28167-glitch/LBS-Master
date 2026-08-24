@@ -6,6 +6,8 @@ data/raw/**
 !data/raw/**/
 !data/raw/**/.gitkeep
 data/raw/osm/_tiles_progress.json
+data/raw/osm/_core_progress.json
+data/processed/roads_gcj.pre.geojson
 node_modules/
 *.log
 .DS_Store

@@ -40,7 +40,7 @@ run("scripts/build-landuse.js");
     }
   }
 }
-run("scripts/build-roads.js");
+run("scripts/build-roads-pipeline.js");
 run("scripts/verify-alignment.js");
 run("scripts/build-synthetic.js");
 run("scripts/verify-synthetic.js");

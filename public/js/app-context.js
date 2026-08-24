@@ -11,7 +11,7 @@
     active_scene: "overview",
     selected_grid_id: null,
     selected_entity: null,
-    layer_set: ["gap"],
+    layer_set: ["gap", "roads"],
     snapshot_id: null,
     pack: "overview",
     ov_metric: "ride_gap",
@@ -89,16 +89,14 @@
     let layer_set = ["gap"];
     if (pack === "ride") {
       active_scene = "ride";
-      layer_set = ["demand", "supply", "gap"];
+      layer_set = ["demand", "supply", "gap", "roads"];
     } else if (pack === "overview") {
       active_scene = "overview";
-      layer_set = ["gap"];
+      layer_set = ["gap", "roads"];
     } else if (pack === "energy") {
-      active_scene = "chg";
-      layer_set = ["gap", "chargers"];
-    } else if (pack === "gov") {
-      active_scene = "gov";
-      layer_set = ["quality", "chargers"];
+      layer_set = ["gap", "chargers", "roads"];
+    } else if (pack === "governance") {
+      layer_set = ["quality", "chargers", "roads"];
     } else {
       active_scene = pack;
       layer_set = state.layer_set.slice();

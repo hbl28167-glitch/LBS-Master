@@ -10,15 +10,22 @@ const { root } = require("./lib/paths");
 const { SHANGHAI_BBOX_WGS84 } = require("./lib/bbox");
 
 const RAW_DIR = root("data", "raw", "osm");
-const OUT = path.join(RAW_DIR, "shanghai_highways_overpass.json");
-const PROGRESS = path.join(RAW_DIR, "_tiles_progress.json");
+const OUT =
+  process.env.LBS_OSM_OUT ||
+  path.join(RAW_DIR, "shanghai_highways_overpass.json");
+const PROGRESS =
+  process.env.LBS_OSM_PROGRESS ||
+  path.join(RAW_DIR, "_tiles_progress.json");
 const ENDPOINTS = [
   "https://overpass-api.de/api/interpreter",
   "https://lz4.overpass-api.de/api/interpreter",
   "https://z.overpass-api.de/api/interpreter"
 ];
+// B2: motorway..tertiary + links (Overpass is fallback when no PBF extract)
 const LEVELS =
-  "motorway|trunk|primary|secondary|motorway_link|trunk_link|primary_link|secondary_link";
+  process.env.LBS_ROAD_LEVELS
+    ? process.env.LBS_ROAD_LEVELS.split(",").map((s) => s.trim()).filter(Boolean).join("|")
+    : "motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link";
 
 function httpPost(url, body, timeoutMs = 90000) {
   return new Promise((resolve, reject) => {

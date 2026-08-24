@@ -1,0 +1,122 @@
+{
+  "built_at": "2026-08-24T07:58:25.899Z",
+  "roads_path": "data\\processed\\roads_gcj.geojson",
+  "feature_count": 34738,
+  "line_parts": 34738,
+  "length_km": 10800.1,
+  "by_highway": {
+    "trunk_link": 1203,
+    "motorway": 3314,
+    "primary": 9743,
+    "trunk": 2771,
+    "motorway_link": 3073,
+    "secondary_link": 317,
+    "secondary": 13757,
+    "primary_link": 560
+  },
+  "length_km_by_highway": {
+    "trunk_link": 254,
+    "motorway": 1565.8,
+    "primary": 3031.4,
+    "trunk": 1268.7,
+    "motorway_link": 685.2,
+    "secondary_link": 46.8,
+    "secondary": 3846.7,
+    "primary_link": 101.5
+  },
+  "tertiary_count": 0,
+  "endpoint_count": 32806,
+  "dangling_tips": 3381,
+  "components": 987,
+  "largest_component_endpoints": 28881,
+  "largest_component_endpoint_ratio": 0.8804,
+  "thresholds": {
+    "min_largest_ratio": 0.92,
+    "max_anchor_p90_m": 150
+  },
+  "anchor_to_road_m": {
+    "count": 16,
+    "p50": 889.3,
+    "p90": 9019.1,
+    "max": 21242.4,
+    "samples": [
+      {
+        "id": "lujiazui",
+        "m": 3026.9
+      },
+      {
+        "id": "peoples_square",
+        "m": 1929
+      },
+      {
+        "id": "hongqiao_hub",
+        "m": 62.8
+      },
+      {
+        "id": "pudong_airport",
+        "m": 405.7
+      },
+      {
+        "id": "xujiahui",
+        "m": 335.7
+      },
+      {
+        "id": "jing_an_temple",
+        "m": 1260.3
+      },
+      {
+        "id": "wujiaochang",
+        "m": 9624.6
+      },
+      {
+        "id": "zhangjiang",
+        "m": 287.4
+      },
+      {
+        "id": "anting",
+        "m": 8413.7
+      },
+      {
+        "id": "dishui_lake",
+        "m": 90.6
+      },
+      {
+        "id": "lingang_new_city",
+        "m": 83.4
+      },
+      {
+        "id": "nanjing_east_road",
+        "m": 2485.5
+      },
+      {
+        "id": "zhongshan_park",
+        "m": 1139
+      },
+      {
+        "id": "century_park",
+        "m": 639.5
+      },
+      {
+        "id": "songjiang_university",
+        "m": 163.9
+      },
+      {
+        "id": "baoshan_steel",
+        "m": 21242.4
+      }
+    ]
+  },
+  "bbox_quadrant_feature_parts": {
+    "nw": 3824,
+    "ne": 597,
+    "sw": 18232,
+    "se": 12085
+  },
+  "gates": {
+    "tertiary_gt_0": false,
+    "largest_ratio_ok": false,
+    "anchor_p90_ok": false,
+    "feature_gt_1000": true
+  },
+  "verdict": "FAIL"
+}

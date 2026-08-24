@@ -1,6 +1,8 @@
 /**
- * OSM highways (WGS84) → GCJ-02 GeoJSON LineString features.
- * Prefers local data/raw/osm/*; else tries Overpass (trunk-level only).
+ * OSM highways (WGS84) → GCJ-02 GeoJSON (pre-snap).
+ * Prefer local full extract (GeoJSON/OSM JSON); Overpass only fallback.
+ * WS-B2 DEFAULT_LEVELS includes tertiary+links.
+ * Formal product file is roads_gcj.geojson after repair-roads-snap.js.
  */
 const fs = require("fs");
 const path = require("path");
@@ -11,18 +13,22 @@ const { wgs84ToGcj02 } = require("./lib/gcj");
 const { SHANGHAI_BBOX_WGS84 } = require("./lib/bbox");
 
 const RAW_DIR = root("data", "raw", "osm");
+const OUT_PRE = root("data", "processed", "roads_gcj.pre.geojson");
 const OUT = root("data", "processed", "roads_gcj.geojson");
 const RAW_CACHE = path.join(RAW_DIR, "shanghai_highways_overpass.json");
 
+/** Frozen B2 levels (motorway..tertiary + links). Override: LBS_ROAD_LEVELS */
 const DEFAULT_LEVELS = [
   "motorway",
-  "trunk",
-  "primary",
-  "secondary",
   "motorway_link",
+  "trunk",
   "trunk_link",
+  "primary",
   "primary_link",
-  "secondary_link"
+  "secondary",
+  "secondary_link",
+  "tertiary",
+  "tertiary_link"
 ];
 
 function levels() {
@@ -123,16 +129,28 @@ function findLocalRaw() {
   if (!fs.existsSync(RAW_DIR)) return null;
   const names = fs.readdirSync(RAW_DIR).filter((n) => !n.startsWith("."));
   const prefer = [
-    "shanghai_highways_overpass.json",
     "shanghai_roads.geojson",
     "shanghai.geojson",
+    "shanghai_extract.geojson",
+    "shanghai_highways_overpass.json",
     "shanghai.osm.json"
   ];
   for (const p of prefer) {
     if (names.includes(p)) return path.join(RAW_DIR, p);
   }
-  const geo = names.find((n) => n.endsWith(".geojson") || n.endsWith(".json"));
-  return geo ? path.join(RAW_DIR, geo) : null;
+  // Prefer largest non-progress json/geojson
+  const cands = names.filter(
+    (n) =>
+      (n.endsWith(".geojson") || n.endsWith(".json")) &&
+      !n.startsWith("_") &&
+      n !== "probe.json"
+  );
+  cands.sort(
+    (a, b) =>
+      fs.statSync(path.join(RAW_DIR, b)).size -
+      fs.statSync(path.join(RAW_DIR, a)).size
+  );
+  return cands.length ? path.join(RAW_DIR, cands[0]) : null;
 }
 
 function httpGet(url, timeoutMs = 120000) {
@@ -221,18 +239,20 @@ async function fetchOverpass(allowList) {
 }
 
 function writeOut(features) {
-  ensureDir(path.dirname(OUT));
+  ensureDir(path.dirname(OUT_PRE));
   const fc = {
     type: "FeatureCollection",
-    crs_note: "GCJ-02 (converted from OSM WGS84)",
+    crs_note: "GCJ-02 (converted from OSM WGS84); pre-snap",
     attribution: "© OpenStreetMap contributors",
     filter: levels(),
     features
   };
+  fs.writeFileSync(OUT_PRE, JSON.stringify(fc));
+  // Also write OUT so lone convert still usable; pipeline overwrites after snap
   fs.writeFileSync(OUT, JSON.stringify(fc));
-  const bytes = fs.statSync(OUT).size;
+  const bytes = fs.statSync(OUT_PRE).size;
   console.log(
-    `roads_gcj: ${features.length} features → ${OUT} (${(bytes / 1e6).toFixed(2)} MB)`
+    `roads_gcj.pre: ${features.length} features → ${OUT_PRE} (${(bytes / 1e6).toFixed(2)} MB)`
   );
 }
 
@@ -311,19 +331,47 @@ async function main() {
   let features = [];
   let source = "none";
 
-  const local = findLocalRaw();
-  if (local) {
-    console.log(`using local raw: ${path.relative(root(), local)}`);
-    const text = fs.readFileSync(local, "utf8");
-    const json = JSON.parse(text);
-    if (json.elements) {
-      features = fromOverpass(json, allow);
-      source = "local_overpass_json";
-    } else {
-      features = fromGeoJSON(json, allow);
-      source = "local_geojson";
+  // Merge all usable local raw JSON/GeoJSON under raw/osm
+  const locals = [];
+  if (fs.existsSync(RAW_DIR)) {
+    for (const n of fs.readdirSync(RAW_DIR)) {
+      if (n.startsWith("_") || n === ".gitkeep") continue;
+      if (!/\.(json|geojson)$/i.test(n)) continue;
+      if (n.includes("probe")) continue;
+      locals.push(path.join(RAW_DIR, n));
     }
-  } else {
+    locals.sort(
+      (a, b) => fs.statSync(b).size - fs.statSync(a).size
+    );
+  }
+  const byOsm = new Map();
+  if (locals.length) {
+    for (const local of locals) {
+      console.log(`using local raw: ${path.relative(root(), local)}`);
+      let json;
+      try {
+        json = JSON.parse(fs.readFileSync(local, "utf8"));
+      } catch (e) {
+        console.warn("skip unreadable", local, e.message);
+        continue;
+      }
+      let part = [];
+      if (json.elements) {
+        part = fromOverpass(json, allow);
+        source = source === "none" ? "local_overpass_json" : source + "+overpass";
+      } else if (json.type === "FeatureCollection" || json.features) {
+        part = fromGeoJSON(json, allow);
+        source = source === "none" ? "local_geojson" : source + "+geojson";
+      }
+      for (const f of part) {
+        const id = f.properties && f.properties.osm_id;
+        if (id != null) byOsm.set(String(id), f);
+        else features.push(f);
+      }
+    }
+    features = features.concat([...byOsm.values()]);
+  }
+  if (!features.length) {
     try {
       const json = await fetchOverpass([...allow]);
       fs.writeFileSync(RAW_CACHE, JSON.stringify(json));

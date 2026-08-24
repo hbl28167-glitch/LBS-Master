@@ -28,34 +28,38 @@
     const attribution =
       '© <a href="https://www.openstreetmap.org/copyright">OSM</a>';
 
-    if (amapKey) {
-      // Gaode / Amap raster tiles (GCJ-02). Key from config.local.js only.
-      const url =
-        "https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}";
-      basemapLayer = L.tileLayer(url, {
-        subdomains: "1234",
-        maxZoom: 18,
-        minZoom: 8,
-        attribution: "© 高德地图 · " + attribution
-      });
-      basemapLayer.on("tileerror", function () {
-        /* keep going; banner handled outside if needed */
-      });
-      basemapLayer.addTo(map);
-      basemapOk = true;
-    } else {
-      // Offline-friendly fallback (no key): Carto dark, WGS approx — demo only
+    // Same Gaode raster TMS as portfolio demos (GCJ-02). Tile URL has no key param;
+    // amapKey reserved for JS API / open-platform apps. Always prefer 高德 for road align.
+    const gaodeUrl =
+      "https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}";
+    basemapLayer = L.tileLayer(gaodeUrl, {
+      subdomains: "1234",
+      maxZoom: 18,
+      minZoom: 8,
+      attribution: "© 高德地图 · " + attribution
+    });
+    let gaodeFailed = false;
+    basemapLayer.on("tileerror", function () {
+      if (gaodeFailed) return;
+      gaodeFailed = true;
+      // Network block / tile deny → WGS fallback (may offset vs GCJ roads)
+      try {
+        map.removeLayer(basemapLayer);
+      } catch (e) {}
       basemapLayer = L.tileLayer(
         "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
         {
           subdomains: "abcd",
           maxZoom: 18,
-          attribution: "© CARTO · " + attribution + " · 无高德 Key，底图为 fallback"
+          attribution: "© CARTO · " + attribution + " · 高德瓦片不可用时的 fallback"
         }
       );
       basemapLayer.addTo(map);
       basemapOk = false;
-    }
+    });
+    basemapLayer.addTo(map);
+    basemapOk = true;
+    void amapKey;
 
     const gridLayer = L.layerGroup().addTo(map);
     const entityLayer = L.layerGroup().addTo(map);
@@ -64,6 +68,8 @@
     const roadsLayer = L.layerGroup();
     let roadsAdded = false;
     let roadsLoaded = false;
+    let roadsGeo = null;
+    let roadsGeoLayer = null;
     let selectedId = null;
     let onSelect = null;
     let cellHalfDeg = null;
@@ -158,36 +164,84 @@
       return scored.slice(0, n);
     }
 
-    function setRoads(geojson) {
-      roadsLayer.clearLayers();
-      roadsLoaded = false;
-      if (!geojson || !geojson.features) return;
-      // Simplify draw: sample features for performance
-      const feats = geojson.features;
-      const maxF = 12000;
-      const step = feats.length > maxF ? Math.ceil(feats.length / maxF) : 1;
-      const filtered = {
-        type: "FeatureCollection",
-        features: []
-      };
-      for (let i = 0; i < feats.length; i += step) {
-        filtered.features.push(feats[i]);
+    function roadStyle(hw) {
+      const h = String(hw || "");
+      if (/motorway/.test(h))
+        return { color: "#38bdf8", weight: 2.4, opacity: 0.92 };
+      if (/trunk/.test(h))
+        return { color: "#0ea5e9", weight: 2.0, opacity: 0.88 };
+      if (/primary/.test(h))
+        return { color: "#38bdf8", weight: 1.6, opacity: 0.8 };
+      if (/secondary/.test(h))
+        return { color: "#94a3b8", weight: 1.2, opacity: 0.7 };
+      if (/tertiary/.test(h))
+        return { color: "#64748b", weight: 0.9, opacity: 0.55 };
+      return { color: "#475569", weight: 0.7, opacity: 0.45 };
+    }
+
+    function roadRank(hw) {
+      const h = String(hw || "");
+      if (/motorway/.test(h)) return 5;
+      if (/trunk/.test(h)) return 4;
+      if (/primary/.test(h)) return 3;
+      if (/secondary/.test(h)) return 2;
+      if (/tertiary/.test(h)) return 1;
+      return 0;
+    }
+
+    function filterRoadsByZoom(feats, z) {
+      // zoom strategy: no random thin-out; filter by class only
+      let minRank = 1; // tertiary+
+      if (z < 11) minRank = 3; // primary+
+      else if (z < 12) minRank = 2; // secondary+
+      const out = [];
+      for (let i = 0; i < feats.length; i++) {
+        const f = feats[i];
+        const hw = f.properties && f.properties.highway;
+        if (roadRank(hw) >= minRank) out.push(f);
       }
-      const layer = L.geoJSON(filtered, {
-        style: function (f) {
-          const hw = (f.properties && f.properties.highway) || "";
-          const major = /motorway|trunk|primary/.test(hw);
-          return {
-            color: major ? "#38bdf8" : "#64748b",
-            weight: major ? 1.6 : 0.9,
-            opacity: major ? 0.85 : 0.55
-          };
-        },
-        interactive: false
-      });
+      // hard cap only if still huge at city zoom
+      const maxF = z < 12 ? 18000 : 40000;
+      if (out.length > maxF) {
+        const step = Math.ceil(out.length / maxF);
+        const capped = [];
+        for (let i = 0; i < out.length; i += step) capped.push(out[i]);
+        return capped;
+      }
+      return out;
+    }
+
+    function rebuildRoadsLayer() {
+      roadsLayer.clearLayers();
+      roadsGeoLayer = null;
+      if (!roadsGeo || !roadsGeo.features) {
+        roadsLoaded = false;
+        return;
+      }
+      const z = map.getZoom();
+      const feats = filterRoadsByZoom(roadsGeo.features, z);
+      const layer = L.geoJSON(
+        { type: "FeatureCollection", features: feats },
+        {
+          style: function (f) {
+            return roadStyle(f.properties && f.properties.highway);
+          },
+          interactive: false
+        }
+      );
       roadsLayer.addLayer(layer);
+      roadsGeoLayer = layer;
       roadsLoaded = true;
     }
+
+    function setRoads(geojson) {
+      roadsGeo = geojson;
+      rebuildRoadsLayer();
+    }
+
+    map.on("zoomend", function () {
+      if (roadsGeo && roadsAdded) rebuildRoadsLayer();
+    });
 
     function showRoads(on) {
       if (on) {

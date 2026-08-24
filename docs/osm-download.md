@@ -1,74 +1,71 @@
-# OSM 下载说明（上海 · ODbL）
+# OSM 下载说明（上海 · ODbL）· WS-B2
 
 原始 OSM **不得**进主仓 git（见根目录 `.gitignore` 的 `data/raw/**`）。
 
-## 推荐路径 A — Overpass（本仓默认）
+## 主源（推荐）— Geofabrik PBF + 裁切
 
-推荐一键分片拉取（可断点续跑）：
+1. 下载 <https://download.geofabrik.de/asia/china-latest.osm.pbf>
+2. 用 [osmium-tool](https://osmcode.org/osmium-tool/) 裁切上海 bbox（WGS84，含临港）：
 
 ```bash
-# 若本机 Node TLS 缺 CA，可临时：
-# set LBS_TLS_INSECURE=1
+osmium extract -b 120.85,30.67,122.20,31.88 china-latest.osm.pbf -o data/raw/osm/shanghai.osm.pbf
+# 再导出公路 GeoJSON（需 osmium export 或 ogr2ogr）
+osmium export data/raw/osm/shanghai.osm.pbf -f geojson -o data/raw/osm/shanghai_roads.geojson
+```
+
+Windows 若无 osmium：见下文 BBBike / Overpass fallback。
+
+3. 将 `shanghai_roads.geojson` 放入 `data/raw/osm/`（**优先于** overpass JSON）
+4. `npm run build:roads`（convert → snap → qc）
+
+## 次选 — BBBike / 完整框选提取
+
+1. <https://extract.bbbike.org/> 框选上海（含临港）
+2. 格式 **GeoJSON** → `data/raw/osm/shanghai_roads.geojson`
+3. `npm run build:roads`
+
+## Fallback — Overpass 分片（不完整时勿宣称全量）
+
+```bash
+# TLS 问题可设 LBS_TLS_INSECURE=1
 npm run download:osm
 npm run build:roads
 ```
 
-产出 raw：
+- 输出：`data/raw/osm/shanghai_highways_overpass.json`
+- 等级默认含 **tertiary**（B2）
+- 可断点：`_tiles_progress.json`（gitignore）
+
+## 等级过滤（冻结 B2）
 
 ```text
-data/raw/osm/shanghai_highways_overpass.json
+motorway, motorway_link, trunk, trunk_link,
+primary, primary_link, secondary, secondary_link,
+tertiary, tertiary_link
 ```
 
-再转换生成 `data/processed/roads_gcj.geojson`。
+覆盖：`LBS_ROAD_LEVELS=motorway,trunk,...`
 
-`build:roads` 也会在无 local raw 时尝试整包 Overpass；失败则写 synthetic 走廊并在 HANDOFF/alignment 标明。
+核心区 residential **不在 B2**（二期按 zoom 加载）。
 
-若网络不可达：按下文手工放 raw 后重跑；**脚本与文档仍应提交**。
-
-## 推荐路径 B — Geofabrik 省包裁切
-
-1. 打开 <https://download.geofabrik.de/asia/china.html>
-2. 下载 `china-latest.osm.pbf`（体积大）或区域切片
-3. 用 `osmium` / QGIS 裁切到上海 bbox（WGS84 约 `120.85,30.67,122.20,31.88`，含临港）
-4. 导出为 GeoJSON 或 OSM XML，放到：
+## 流水线
 
 ```text
-data/raw/osm/shanghai.osm
-# 或
-data/raw/osm/shanghai_roads.geojson
+raw → build-roads.js → roads_gcj.pre.geojson
+    → repair-roads-snap.js (ε≈2m) → roads_gcj.geojson
+    → qc-roads.js → docs/roads-qc-report.md
 ```
-
-5. 再跑 `npm run build:roads`（脚本会优先读本地 raw）
-
-## 推荐路径 C — BBBike 自定义提取
-
-1. <https://extract.bbbike.org/>
-2. 框选上海（含临港）
-3. 格式选 **GeoJSON** 或 **OSM XML**
-4. 放入 `data/raw/osm/`
-
-## 过滤策略（体积）
-
-默认只保留：
-
-`motorway|trunk|primary|secondary` 及其 `_link`
-
-不保留 residential/service 等支路（演示叠图足够；文档与 HANDOFF 说明）。
-
-如需更密路网：设置环境变量：
 
 ```bash
-# PowerShell
-$env:LBS_ROAD_LEVELS="motorway,trunk,primary,secondary,tertiary"
-npm run build:roads
+npm run build:roads          # 全流水线；qc FAIL 则 exit 1
+npm run repair:roads
+npm run qc:roads
 ```
 
 ## 署名
-
-产物 `manifest.json` 与 README 须保留：
 
 **© OpenStreetMap contributors**（ODbL）
 
 ## 坐标
 
-OSM 源为 **WGS84**；构建时经 `scripts/lib/gcj.js` 转为 **GCJ-02** 再与高德底图叠合。禁止用手工仿射替代转换模型。
+源 WGS84 → `scripts/lib/gcj.js` → GCJ-02。禁止仿射拉图。

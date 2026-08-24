@@ -1,15 +1,17 @@
 {
-  "source": "local_overpass_json",
+  "source": "local_overpass_json+overpass",
   "filter": [
     "motorway",
-    "trunk",
-    "primary",
-    "secondary",
     "motorway_link",
+    "trunk",
     "trunk_link",
+    "primary",
     "primary_link",
-    "secondary_link"
+    "secondary",
+    "secondary_link",
+    "tertiary",
+    "tertiary_link"
   ],
-  "feature_count": 34738,
-  "built_at": "2026-08-23T09:52:31.173Z"
+  "feature_count": 56578,
+  "built_at": "2026-08-24T08:43:20.648Z"
 }

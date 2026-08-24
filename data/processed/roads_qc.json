@@ -1,0 +1,128 @@
+{
+  "built_at": "2026-08-24T08:43:58.458Z",
+  "roads_path": "data\\processed\\roads_gcj.geojson",
+  "feature_count": 56578,
+  "line_parts": 56578,
+  "length_km": 16453.6,
+  "by_highway": {
+    "tertiary": 10103,
+    "primary": 13868,
+    "primary_link": 874,
+    "trunk_link": 1939,
+    "trunk": 3614,
+    "tertiary_link": 136,
+    "secondary": 17621,
+    "motorway": 4195,
+    "motorway_link": 3810,
+    "secondary_link": 418
+  },
+  "length_km_by_highway": {
+    "tertiary": 2625.8,
+    "primary": 4080.5,
+    "primary_link": 132.3,
+    "trunk_link": 398.2,
+    "trunk": 1718.6,
+    "tertiary_link": 16.1,
+    "secondary": 4784.6,
+    "motorway": 1823.3,
+    "motorway_link": 819.1,
+    "secondary_link": 55.1
+  },
+  "tertiary_count": 10239,
+  "graph_mode": "vertices",
+  "node_count": 203303,
+  "endpoint_count": 51690,
+  "dangling_tips": 1660,
+  "components": 55,
+  "largest_component_endpoints": 202481,
+  "largest_component_endpoint_ratio": 0.996,
+  "thresholds": {
+    "min_largest_ratio": 0.85,
+    "max_anchor_p90_m": 300
+  },
+  "anchor_to_road_m": {
+    "count": 16,
+    "p50": 87,
+    "p90": 241.5,
+    "max": 405.7,
+    "samples": [
+      {
+        "id": "lujiazui",
+        "m": 0.3
+      },
+      {
+        "id": "peoples_square",
+        "m": 0.2
+      },
+      {
+        "id": "hongqiao_hub",
+        "m": 62.8
+      },
+      {
+        "id": "pudong_airport",
+        "m": 405.7
+      },
+      {
+        "id": "xujiahui",
+        "m": 195.5
+      },
+      {
+        "id": "jing_an_temple",
+        "m": 18.2
+      },
+      {
+        "id": "wujiaochang",
+        "m": 66.5
+      },
+      {
+        "id": "zhangjiang",
+        "m": 287.4
+      },
+      {
+        "id": "anting",
+        "m": 102.7
+      },
+      {
+        "id": "dishui_lake",
+        "m": 90.6
+      },
+      {
+        "id": "lingang_new_city",
+        "m": 83.4
+      },
+      {
+        "id": "nanjing_east_road",
+        "m": 43.3
+      },
+      {
+        "id": "zhongshan_park",
+        "m": 8.8
+      },
+      {
+        "id": "century_park",
+        "m": 172
+      },
+      {
+        "id": "songjiang_university",
+        "m": 163.9
+      },
+      {
+        "id": "baoshan_steel",
+        "m": 102.8
+      }
+    ]
+  },
+  "bbox_quadrant_feature_parts": {
+    "nw": 11949,
+    "ne": 8632,
+    "sw": 20847,
+    "se": 15150
+  },
+  "gates": {
+    "tertiary_gt_0": true,
+    "largest_ratio_ok": true,
+    "anchor_p90_ok": true,
+    "feature_gt_1000": true
+  },
+  "verdict": "PASS"
+}

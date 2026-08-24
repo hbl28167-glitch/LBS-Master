@@ -49,11 +49,10 @@ npm run build          # = build:geo
 
 ## 已知问题 / 备注
 
-1. Overpass 整包易超时；用 `download-osm-roads.js` 分片。本机构建时部分北缘 tile 可能未拉全，主干覆盖已够演示；可续跑 `npm run download:osm` 再 `build:roads`。
-2. 路网默认过滤：`motorway|trunk|primary|secondary` + links（`LBS_ROAD_LEVELS` 可扩）。
-3. 高德**底图**不下载：WS-D 用在线瓦片 + `AMAP_KEY`；本 WS 只产矢量 GCJ 叠层。
-4. `npm run build` 尚不含 WS-C synthetic（metrics）；C 接入后扩展 `build-all.js`。
-5. 本机 PATH 可能无 node：可用已装 Node 18+ 或 IDE 自带 node 跑脚本。
+1. **路网 B2 已补全**：见 `docs/HANDOFF-WS-B2.md`（tertiary + snap + qc + 默认显示）。勿再用本文件旧 secondary-only 描述当现状。
+2. Overpass 分片为 fallback；完整源见 `docs/osm-download.md`（PBF 优先）。
+3. 高德**底图**不下载：在线瓦片；矢量路网 GCJ 叠层。
+4. 本机 PATH 可能无 node：用 Node 18+ 或 IDE 自带 node。
 
 ## 下游 WS-C
 

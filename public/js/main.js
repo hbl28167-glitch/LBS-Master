@@ -200,15 +200,10 @@
     });
 
     let layers = ctx.layer_set || [];
-    if (pack === "overview") layers = ["gap"];
+    if (pack === "overview") layers = ["gap", "roads"];
 
     if (layers.indexOf("gap") >= 0 && gdr) {
       showBanner("gap 不可用：" + gdr + "（未将 demand 当作缺口）", true);
-    } else if (!cfg().amapKey) {
-      showBanner(
-        "未配置高德 Key：已用 fallback 底图。复制 public/config.local.example.js → config.local.js 并填写 amapKey。",
-        true
-      );
     } else {
       showBanner("", false);
     }
@@ -289,11 +284,6 @@
 
     if (showGap && gdr) {
       showBanner("chg gap 不可用：" + gdr, true);
-    } else if (!cfg().amapKey) {
-      showBanner(
-        "未配置高德 Key：已用 fallback 底图。能源包 scene=chg · Synthetic。",
-        true
-      );
     } else {
       showBanner("", false);
     }
@@ -349,14 +339,7 @@
     const showQ = !ui.layerQuality || ui.layerQuality.checked;
     const showChg = !ui.layerChargersG || ui.layerChargersG.checked;
 
-    if (!cfg().amapKey) {
-      showBanner(
-        "未配置高德 Key · 治理图例「数据质量」· 不处理终端 GPS 漂移",
-        true
-      );
-    } else {
-      showBanner("治理边界：不处理终端 GPS 漂移（仅主数据/入口类）", true);
-    }
+    showBanner("治理边界：不处理终端 GPS 漂移（仅主数据/入口类）", true);
 
     mapApp.renderChargers(showChg ? chargers() : [], {
       visible: showChg,
@@ -1194,14 +1177,20 @@
     });
 
     try {
+      if (location.protocol === "file:") {
+        throw new Error("file-protocol");
+      }
       data = await LBSData.loadAll({ roads: true });
     } catch (e) {
       console.error(e);
       setStatus("数据加载失败");
-      showBanner(
-        "无法加载 public/data/*。请在仓根执行 npm run build（含 copy-public-data），再用静态服务器打开 public/。",
-        true
-      );
+      var tip =
+        location.protocol === "file:" || (e && e.message === "file-protocol")
+          ? "请勿双击 HTML。在仓根运行 start-demo.bat 或 npm run serve，浏览器打开 http://127.0.0.1:4173/"
+          : "无法加载 data/*（当前页 " +
+            location.href +
+            "）。在仓根执行 npm run copy:public-data 后，用静态服务打开 public/（http://127.0.0.1:4173/），不要 file://。";
+      showBanner(tip, true);
       return;
     }
 
@@ -1218,6 +1207,8 @@
 
     if (data.roads) {
       mapApp.setRoads(data.roads);
+      // B2: default show roads on load (overview/ride checkboxes default checked)
+      mapApp.showRoads(true);
     }
 
     if (ui.synthNote) {
@@ -1238,7 +1229,7 @@
         ((data.metrics_chg && data.metrics_chg.count) || "?") +
         " · 小李站 " +
         chargers().length +
-        (amapKey ? " · 高德底图" : " · fallback 底图")
+        " · 高德底图"
     );
   }
 
