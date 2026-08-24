@@ -8,6 +8,8 @@ Static map shell + Node build pipeline. Synthetic business metrics on real-ish s
 
 **Requirements:** Node.js **18+**
 
+**体验验收以 PRD 05.1（地图体验与空间体系）为准**；`Byteda\P1\demo\` 下 UI 仅为布局/叙事示意，**非正式**数据与交付。
+
 ---
 
 ## Architecture (three layers)
@@ -105,7 +107,7 @@ Acceptance checklists: `docs/acceptance-main-path.md`, `docs/acceptance-side-pat
 
 ## Layout
 
-- `contracts/` — AppContext, grid, scene-gap, payload schemas
+- `contracts/` — AppContext (+05.1 road/heat/LOD/storeFocus), zone + color tokens, grid, scene-gap, payload（见 `contracts/README.md`）
 - `scripts/` — Node build pipeline (paths via `scripts/lib/paths.js` → repo root only)
 - `data/raw/` — raw OSM (gitignored)
 - `data/static/` — anchors, calendar, weather, corridor copy
@@ -160,9 +162,12 @@ Portability record: [`docs/portability-check.md`](docs/portability-check.md).
 | `docs/acceptance-side-path.md` | Gate E checklist |
 | `docs/portability-check.md` | Swap-machine / swap-dir proof |
 | `docs/HANDOFF-WS-*.md` | Per-workstream handoffs |
+| `contracts/README.md` | Contract index + 05.1 delta |
 | `docs/osm-download.md` | Overpass download notes |
 | `docs/synthetic-rules.md` | Synthetic metric rules |
 | `docs/alignment-sample.md` | Road/basemap sample notes |
+| Byteda `P1/05.1-…` | Map UX acceptance (external spec) |
+| Byteda `P1/demo/` | Informal layout preview only |
 
 ---
 

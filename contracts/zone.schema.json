@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lbs-master.local/contracts/zone.schema.json",
+  "title": "LBS-Master functional zone (区面)",
+  "description": "PRD 05.1 spatial unit. Primary heat/structure object. Geometry split along major roads; no city-wide single residential blob. zone_id stable once published — changing it requires C/D rebuild.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "zone_id",
+    "zone_type",
+    "name",
+    "color_token",
+    "is_valid"
+  ],
+  "properties": {
+    "zone_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable id, e.g. sh:zone:lujiazui-cbd-01"
+    },
+    "zone_type": {
+      "type": "string",
+      "enum": [
+        "commercial",
+        "residential",
+        "office",
+        "industrial",
+        "hub",
+        "tourism",
+        "open",
+        "mixed",
+        "other"
+      ],
+      "description": "commercial=商圈/综合体; industrial=工业; residential=住宅; office=办公/CBD/园区; hub=枢纽; tourism=文旅; open=农田/空旷"
+    },
+    "grade": {
+      "type": ["string", "null"],
+      "description": "Optional tier. commercial: premium|mass|community. residential: high_density_mass|upgrade|premium_low_density. null for types without grade.",
+      "enum": [
+        "premium",
+        "mass",
+        "community",
+        "high_density_mass",
+        "upgrade",
+        "premium_low_density",
+        null
+      ]
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Display name; prefer real public place names near true location; boundary may be schematic"
+    },
+    "color_token": {
+      "type": "string",
+      "description": "Must match contracts/zone-color-tokens.md (e.g. zone.commercial.premium)"
+    },
+    "centroid_lng": {
+      "type": "number",
+      "description": "GCJ-02"
+    },
+    "centroid_lat": {
+      "type": "number",
+      "description": "GCJ-02"
+    },
+    "bbox_gcj": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": { "type": "number" },
+      "description": "[minLng, minLat, maxLng, maxLat] GCJ-02"
+    },
+    "labels": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Optional tags: portrait, corridor, etc."
+    },
+    "is_valid": {
+      "type": "boolean"
+    },
+    "source": {
+      "type": "string",
+      "description": "e.g. public_aoi | schematic | osm_derived"
+    }
+  }
+}

@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://lbs-master.local/contracts/grid.schema.json",
   "title": "LBS-Master grid cell",
+  "description": "Fine/legacy spatial cell. PRD 05.1: not the default product hero layer (use zone poly heat). grid_id algorithm is frozen — do not change without migrating metrics and UI. Optional heatRenderMode=grid uses ~200–300m cells, not citywide 1km mesh.",
   "type": "object",
   "additionalProperties": false,
   "required": [
