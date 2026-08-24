@@ -1,8 +1,10 @@
 # HANDOFF · WS-B zones / water / fine-grids（05.1）
 
 - 仓：`C:\Users\hongbol\Documents\LBS-Master`
+- commit：`252a220` — `feat(data): shanghai zones water fine-grids; deprecate 1km UI grid`
 - 路网底座：见 `HANDOFF-WS-B2.md`（须先 PASS）
 - 本交付：功能区面 + 水系 + 可变细格；**删除 1km 格作为 UI 主数据**
+- 注：本会话**未**大改 D 渲染；`public/data` 已有 zones/water，D 需接线默认图层
 
 ## zone_id 规则（冻结）
 
