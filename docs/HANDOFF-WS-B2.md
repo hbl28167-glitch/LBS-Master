@@ -3,7 +3,7 @@
 - 仓：`C:\Users\hongbol\Documents\LBS-Master`
 - branch：`master`
 - 依赖：WS-B 已有 GCJ / anchors；本任务只动路网流水线 + 默认显示
-- commit：见文末 hash
+- commit：`c710054` — `fix(data): rebuild shanghai roads tertiary+qc+snap`
 
 ## 旧路网为何不可用（why broken）
 
