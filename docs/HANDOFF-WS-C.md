@@ -1,7 +1,7 @@
 # HANDOFF WS-C (05.1 zone-driven)
 
 - branch: `master`
-- feat commit: (see `git log -1 --grep synthetic`)
+- feat commit: `aefbf99` - `feat(data): zone-driven synthetic metrics and denser entities`
 - depends: **WS-B zones** (`zone_id` frozen) + optional `grids_fine` for heat
 - business data: **all Synthetic**
 - status: **UNBLOCKED** (zones present: 118)
