@@ -2,7 +2,7 @@
 
 - 仓：`C:\Users\hongbol\Documents\LBS-Master`（可换机）
 - branch：`master`
-- commit：见 `git log -1` — `feat(app): o2o focus fulfillment energy per PRD 05.1`
+- commit：`0c51e22` — `feat(app): o2o focus fulfillment energy per PRD 05.1`
 - 依赖：WS-D 05.1 壳 · C `entities_store` / `entities_charger` / `metrics_o2o|delivery|chg` · B2 路网
 - 验收：`docs/acceptance-side-path.md` + PRD 05.1 §3.8–3.9
 
