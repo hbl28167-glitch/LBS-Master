@@ -85,14 +85,32 @@ raw（gitignore）：`shanghai_highways_overpass.json`、`shanghai_core_overpass
 ## 已知限制
 
 1. 无本地 osmium 时仍靠 Overpass；全市+核心合并后仍可能有边缘空洞。  
-2. snap 仅端点 ε=2m，不补缺失路段。  
+2. snap：端点 ε=2m + **T 接** tip→他 way 顶点（默认 8m，`LBS_ROAD_TJOIN_M`）。不发明缺失路段。  
 3. 拥堵色/业务难度属性留给 D 用等级×情景规则乘；本交付保证几何+highway 等级。  
-4. `roads_gcj.pre.geojson` gitignore（中间态）。
+4. `roads_gcj.pre.geojson` gitignore（中间态）。  
+5. **无 residential** 时最后一公里仍会疏（05.1 核心区支路待下一刀 `LBS_ROAD_LEVELS` 扩展 + 下载）。
+
+## 2026-08-24 观感「仍断」热修
+
+用户反馈 QC PASS 但肉眼仍断。根因主要是 **前端**：
+
+| 原因 | 处理 |
+|------|------|
+| 默认 zoom=11 只画 primary+，secondary/tertiary 被滤掉 | 默认 **zoom=12**；z&lt;12 即含 **secondary**；z≥12 含 tertiary |
+| 线偏细偏灰 | 加粗加亮，round cap/join |
+| 格网 fill 0.55 抢戏 | 默认透明度 **0.32** |
+| 抽稀 | 改为按等级优先截断，提高 cap |
+| 渲染 | Leaflet **canvas** renderer |
+| 拓扑 | snap 增加 **T-junction**（本轮 tjoin snaps 见 `roads_snap_log.json`） |
+
+请用户：`npm run serve` → **Ctrl+F5** 强刷 → 默认应见次干网；再放大看三级。
 
 ## 验收请用户
 
 ```bash
 npm run serve
-# 打开总览：默认应见路网；放大陆家嘴/虹桥/临港压高德道路
-# 打开 docs/roads-qc-report.md 看 PASS
+# Ctrl+F5 强刷
+# 打开总览：默认应见连续次干+主干网（非仅几条高速）
+# 放大陆家嘴/虹桥/临港；勾选路网保持开
+# docs/roads-qc-report.md → PASS
 ```

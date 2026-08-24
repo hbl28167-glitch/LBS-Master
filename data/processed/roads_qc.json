@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-08-24T08:43:58.458Z",
+  "built_at": "2026-08-24T08:58:56.570Z",
   "roads_path": "data\\processed\\roads_gcj.geojson",
   "feature_count": 56578,
   "line_parts": 56578,
@@ -17,7 +17,7 @@
     "secondary_link": 418
   },
   "length_km_by_highway": {
-    "tertiary": 2625.8,
+    "tertiary": 2625.7,
     "primary": 4080.5,
     "primary_link": 132.3,
     "trunk_link": 398.2,
@@ -30,12 +30,12 @@
   },
   "tertiary_count": 10239,
   "graph_mode": "vertices",
-  "node_count": 203303,
-  "endpoint_count": 51690,
-  "dangling_tips": 1660,
-  "components": 55,
-  "largest_component_endpoints": 202481,
-  "largest_component_endpoint_ratio": 0.996,
+  "node_count": 203259,
+  "endpoint_count": 51671,
+  "dangling_tips": 1623,
+  "components": 53,
+  "largest_component_endpoints": 202494,
+  "largest_component_endpoint_ratio": 0.9962,
   "thresholds": {
     "min_largest_ratio": 0.85,
     "max_anchor_p90_m": 300

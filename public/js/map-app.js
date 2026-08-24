@@ -20,8 +20,8 @@
       preferCanvas: true
     });
 
-    // Shanghai center (GCJ-ish)
-    map.setView([31.23, 121.47], 11);
+    // Shanghai center (GCJ-ish). Zoom 12 shows secondary+ mesh (less "broken" than 11).
+    map.setView([31.23, 121.47], 12);
 
     let basemapOk = false;
     let basemapLayer = null;
@@ -126,7 +126,8 @@
           [g.cell_lat + h.dLat, g.cell_lng + h.dLng]
         ];
         const fill = it.fill || "#64748b";
-        const opacity = it.opacity != null ? it.opacity : 0.55;
+        // Keep grids translucent so road mesh stays readable underneath/over
+        const opacity = it.opacity != null ? it.opacity : 0.32;
         const rect = L.rectangle(bounds, {
           gridId: g.grid_id,
           _baseOpacity: opacity,
@@ -164,19 +165,65 @@
       return scored.slice(0, n);
     }
 
-    function roadStyle(hw) {
+    function roadStyle(hw, z) {
       const h = String(hw || "");
+      const zoomBoost = z >= 13 ? 1.15 : z >= 12 ? 1.05 : 1;
+      // Brighter + thicker so secondary/tertiary read as a connected mesh
       if (/motorway/.test(h))
-        return { color: "#38bdf8", weight: 2.4, opacity: 0.92 };
+        return {
+          color: "#7dd3fc",
+          weight: 3.2 * zoomBoost,
+          opacity: 0.95,
+          lineCap: "round",
+          lineJoin: "round"
+        };
       if (/trunk/.test(h))
-        return { color: "#0ea5e9", weight: 2.0, opacity: 0.88 };
+        return {
+          color: "#38bdf8",
+          weight: 2.6 * zoomBoost,
+          opacity: 0.92,
+          lineCap: "round",
+          lineJoin: "round"
+        };
       if (/primary/.test(h))
-        return { color: "#38bdf8", weight: 1.6, opacity: 0.8 };
+        return {
+          color: "#0ea5e9",
+          weight: 2.2 * zoomBoost,
+          opacity: 0.88,
+          lineCap: "round",
+          lineJoin: "round"
+        };
       if (/secondary/.test(h))
-        return { color: "#94a3b8", weight: 1.2, opacity: 0.7 };
+        return {
+          color: "#94a3b8",
+          weight: 1.7 * zoomBoost,
+          opacity: 0.82,
+          lineCap: "round",
+          lineJoin: "round"
+        };
       if (/tertiary/.test(h))
-        return { color: "#64748b", weight: 0.9, opacity: 0.55 };
-      return { color: "#475569", weight: 0.7, opacity: 0.45 };
+        return {
+          color: "#cbd5e1",
+          weight: 1.35 * zoomBoost,
+          opacity: 0.78,
+          lineCap: "round",
+          lineJoin: "round"
+        };
+      if (/residential|unclassified|living_street/.test(h))
+        return {
+          color: "#64748b",
+          weight: 1.1 * zoomBoost,
+          opacity: 0.7,
+          lineCap: "round",
+          lineJoin: "round"
+        };
+      return {
+        color: "#475569",
+        weight: 1.0,
+        opacity: 0.55,
+        lineCap: "round",
+        lineJoin: "round"
+      };
     }
 
     function roadRank(hw) {
@@ -186,27 +233,44 @@
       if (/primary/.test(h)) return 3;
       if (/secondary/.test(h)) return 2;
       if (/tertiary/.test(h)) return 1;
+      if (/residential|unclassified|living_street/.test(h)) return 0;
       return 0;
     }
 
+    /**
+     * Zoom class filter — show connecting mesh early (was too aggressive:
+     * z=11 only primary+ looked "broken").
+     *  z < 10  → trunk+
+     *  z < 11  → primary+
+     *  z < 12  → secondary+   ← default city view includes secondary mesh
+     *  z >= 12 → tertiary+
+     *  z >= 14 → residential if present
+     */
     function filterRoadsByZoom(feats, z) {
-      // zoom strategy: no random thin-out; filter by class only
-      let minRank = 1; // tertiary+
-      if (z < 11) minRank = 3; // primary+
-      else if (z < 12) minRank = 2; // secondary+
+      let minRank = 0;
+      if (z < 10) minRank = 4;
+      else if (z < 11) minRank = 3;
+      else if (z < 12) minRank = 2;
+      else if (z < 14) minRank = 1;
+      else minRank = 0;
+
       const out = [];
       for (let i = 0; i < feats.length; i++) {
         const f = feats[i];
         const hw = f.properties && f.properties.highway;
         if (roadRank(hw) >= minRank) out.push(f);
       }
-      // hard cap only if still huge at city zoom
-      const maxF = z < 12 ? 18000 : 40000;
+      // Canvas can handle large sets; only cap at very low zoom if extreme
+      const maxF = z < 11 ? 25000 : z < 13 ? 50000 : 80000;
       if (out.length > maxF) {
-        const step = Math.ceil(out.length / maxF);
-        const capped = [];
-        for (let i = 0; i < out.length; i += step) capped.push(out[i]);
-        return capped;
+        // Prefer keeping higher-class roads when capping
+        out.sort(function (a, b) {
+          return (
+            roadRank(b.properties && b.properties.highway) -
+            roadRank(a.properties && a.properties.highway)
+          );
+        });
+        return out.slice(0, maxF);
       }
       return out;
     }
@@ -223,8 +287,9 @@
       const layer = L.geoJSON(
         { type: "FeatureCollection", features: feats },
         {
+          renderer: L.canvas({ padding: 0.5 }),
           style: function (f) {
-            return roadStyle(f.properties && f.properties.highway);
+            return roadStyle(f.properties && f.properties.highway, z);
           },
           interactive: false
         }

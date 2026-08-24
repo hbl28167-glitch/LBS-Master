@@ -1,15 +1,15 @@
 # Roads QC report · WS-B2
 
-- generated: 2026-08-24T08:43:58.458Z
+- generated: 2026-08-24T08:58:56.570Z
 - label: **after**
 - verdict: **PASS**
 - features: 56578
 - length_km: 16453.6
 - tertiary(+link): 10239
-- endpoints: 51690
-- dangling_tips (deg=1): 1660
-- components: 55
-- largest_component_endpoint_ratio: 0.996 (min 0.85)
+- endpoints: 51671
+- dangling_tips (deg=1): 1623
+- components: 53
+- largest_component_endpoint_ratio: 0.9962 (min 0.85)
 - anchor→road m: P50=87 P90=241.5 max=405.7
 
 ## Gates
@@ -25,9 +25,9 @@
 |--------|-------:|------:|
 | features | 34738 | 56578 |
 | tertiary | 0 | 10239 |
-| largest_ratio | 0.8804 | 0.996 |
-| dangling_tips | 3381 | 1660 |
-| components | 987 | 55 |
+| largest_ratio | 0.8804 | 0.9962 |
+| dangling_tips | 3381 | 1623 |
+| components | 987 | 53 |
 | anchor P90 m | 9019.1 | 241.5 |
 
 ## by_highway (count)
