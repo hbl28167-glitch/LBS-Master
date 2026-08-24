@@ -2,54 +2,54 @@
 
 | 项 | 值 |
 |----|-----|
-| 日期 | **2026-08-23** |
+| 日期 | **2026-08-24**（WS-F 05.1 续工复核） |
 | 操作者 | WS-F 代理 |
-| 源目录 | 开发机上的仓库根（任意盘符/用户名均可；源码无写死路径） |
-| 实测目录 | 拷贝至临时路径 `…/AppData/Local/Temp/opencode/lbs-master-port-check`（**换目录**，非同路径打开） |
-| Node | v22.17.1（便携 node；目标机需自备 Node 18+） |
+| 源目录 | 开发机仓库根（任意盘符/用户名；源码无写死路径） |
+| 初测 | 2026-08-23 拷贝至 `…/Temp/opencode/lbs-master-port-check` |
+| 复核 | 2026-08-24：`portable-paths` 于当前仓 **52 files OK**；无 `.env` 真 Key 入仓 |
 
 ## 步骤与结果
 
 | # | 步骤 | 结果 |
 |---|------|------|
-| 1 | 整树拷贝到新目录（排除 `node_modules`、`.git`、`data/raw`） | OK |
-| 2 | 在新目录执行 portable-paths 扫描 | **OK** — `portable-paths: OK (32 files scanned)` |
-| 3 | 在新目录 `node --test tests/portable-paths.test.js tests/gcj.test.js` | **9/9 pass** |
-| 4 | `scripts/lib/paths.js` 解析 `ROOT` | 解析为**新目录绝对路径**（运行时 `path.resolve`，源码无盘符字面量） |
-| 5 | `.env` / `config.local.js` | 源仓与拷贝均 **不存在** 真 Key 文件；example 仅空模板 |
-| 6 | gitignore 抽检 | `.env`、`public/config.local.js`、`data/raw/osm/*` 均被忽略规则覆盖 |
+| 1 | 整树拷贝到新目录（排除 `node_modules`、`.git`、`data/raw`） | OK（08-23） |
+| 2 | 新目录 portable-paths | **OK** |
+| 3 | `node --test` portable + gcj | **9/9 pass**（08-23） |
+| 4 | `scripts/lib/paths.js` ROOT | 运行时 resolve 到新目录；源码无盘符字面量 |
+| 5 | `.env` / 真 Key | **无**；`config.local.js` gitignore，example 空模板 |
+| 6 | 2026-08-24 源仓 `verify:paths` | **OK (52 files)** |
 
-## 源仓审计（同日）
+## 源仓审计（05.1 续工）
 
 | 检查 | 结果 |
 |------|------|
-| `git status` | clean（审计前） |
-| 绝对路径扫描 `scripts/` + `public/` | 0 violation |
-| 真 Key 入仓 | 无（无 `.env`、无 `config.local.js`） |
-| 雇主站名 / 禁品牌展示 | UI 与数据为 **小李***；`verify-synthetic` 含禁词表属防护，非展示 |
-| 巨型 raw OSM | `data/raw/**` gitignore；不入主仓 |
-| git 已跟踪体积（约） | **~16.6 MB**（不含 raw / public/data 运行时拷贝） |
-| 工作区含 processed 时量级 | 约数十 MB 级本地文件；策略见 README Volume |
+| 绝对路径 `scripts/` + `public/` | 0 violation |
+| 真 Key 入仓 | 无 `.env`；`config.local.js` 不跟踪 |
+| 雇主站名 | 展示 **小李***；禁词表仅 verify 门禁 |
+| 巨型 raw OSM | `data/raw/**` gitignore |
+| ODbL / 高德 | README 署名；Key BYO |
+| 打开方式 | 必须 `http://127.0.0.1:4173/` 或 `start-demo.bat`，禁止 `file://` |
 
-## 换机清单（给下一台电脑）
+## 换机清单
 
 ```text
 1. 安装 Node.js 18+
-2. clone / 拷贝仓库到任意目录
-3. copy .env.example → .env          # 可选，管道用
-4. copy public/config.local.example.js → public/config.local.js  # 填 amapKey
-5. npm test
-6. npm run copy:public-data   # 或 npm run build
-7. npm run serve              # http://localhost:4173
+2. clone / 拷贝到任意目录
+3. （可选）config.local.js / .env — 勿提交真 Key
+4. npm test
+5. npm run copy:public-data   # 或 npm run build
+6. npm run serve  或  start-demo.bat
+7. 浏览器 http://127.0.0.1:4173/  · Ctrl+F5
+8. 口播 docs/demo-script.md（PRD 05.1）
 ```
 
 ## 结论
 
-- **换目录可运行检测通过**（路径测试 + GCJ 单测）。  
-- UI 全链路需本机 `copy:public-data`/`build` 后 `serve`（`public/data` 默认不入 git）。  
-- 高德 Key **自备**；无 Key 可降级演示。
+- **换目录路径检测通过**；UI 需 copy/build 后 serve。  
+- 05.1 演示叙事见 `docs/demo-script.md`（地图感→点路→出行→履约/到店）。  
+- **Byteda demo HTML 非正式产品。**
 
-## 未做 / 边界
+## 边界
 
-- 未在第二台物理机重装 OS 级验证（本记录 = **换目录/换路径根** 实测，满足 PRD「不绑死本机路径」）。  
-- 未在本记录中提交任何真实 Key。
+- 未做第二台物理机 OS 重装级验证。  
+- 未提交任何真实 Key。
