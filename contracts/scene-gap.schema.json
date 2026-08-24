@@ -1,37 +1,39 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://lbs-master.local/contracts/scene-gap.schema.json",
-  "title": "LBS-Master scene gap metrics row",
+  "title": "LBS-Master scene gap metrics row (05.1 zone-primary)",
   "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "grid_id",
-    "scene",
-    "time_of_day",
-    "demand_base",
-    "supply_base"
-  ],
+  "additionalProperties": true,
+  "required": ["scene", "time_of_day", "demand_base", "supply_base"],
   "properties": {
+    "zone_id": {
+      "type": "string",
+      "description": "Primary spatial key when unit_kind=zone. Frozen: sh:z:{type}:{slug}"
+    },
     "grid_id": {
       "type": "string",
-      "minLength": 1
+      "description": "Fine grid id sh:f:… or legacy alias; for zone rows equals zone_id for loader compat"
+    },
+    "unit_kind": {
+      "type": "string",
+      "enum": ["zone", "fine_grid", "legacy_grid"]
     },
     "scene": {
       "type": "string",
-      "enum": ["ride", "chg"]
+      "enum": ["ride", "delivery", "chg", "o2o"]
     },
-    "time_of_day": {
-      "type": "string",
-      "minLength": 1
-    },
+    "time_of_day": { "type": "string", "minLength": 1 },
     "demand_base": {
       "type": "number",
-      "description": "Synthetic index on 0–100 scale (already normalized)."
+      "description": "Synthetic index 0–100 (already normalized)"
     },
     "supply_base": {
       "type": "number",
-      "description": "Synthetic index on 0–100 scale (already normalized)."
-    }
+      "description": "Synthetic index 0–100 (already normalized)"
+    },
+    "zone_type": { "type": "string" },
+    "grade": { "type": ["string", "null"] },
+    "cell_m": { "type": "number" }
   },
-  "description": "Runtime: demand = demand_base * weather_coeff[weather].demand_{scene} * node_coeff; supply = supply_base * weather_coeff[weather].supply_{scene} * node_coeff. norm is identity on 0–100 indices, so gap = demand - supply (higher = worse shortage). Coefficients from data/static/weather_coeff.json and calendar.json. All metrics are Synthetic."
+  "description": "Runtime: demand = demand_base * weather.demand_{scene} * node_coeff; supply = supply_base * weather.supply_{scene} * node_coeff / difficulty_{scene}; gap = demand - supply (identity norm). Weather/calendar/congestion from data/static. Primary unit is zone (05.1); fine_grid is heat mode only. All Synthetic."
 }

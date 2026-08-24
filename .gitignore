@@ -8,6 +8,8 @@ data/raw/**
 data/raw/osm/_tiles_progress.json
 data/raw/osm/_core_progress.json
 data/processed/roads_gcj.pre.geojson
+# large build artifact (~50MB); regenerate via npm run build:synthetic
+data/processed/metrics_heat_fine.json
 node_modules/
 *.log
 .DS_Store

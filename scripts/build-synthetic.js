@@ -1,150 +1,151 @@
 /**
- * WS-C · Synthetic ride/chg metrics + 小李 charger entities.
+ * WS-C · Zone-driven synthetic metrics + dense 小李 entities (05.1 / Byteda-V2-0824).
  *
  * ALL business numbers are Synthetic (manifest.synthetic=true).
  * Display brand: 小李* — no employer site names.
  *
- * ── Ride base formula (interview-friendly) ──────────────────────────
- * demand_base, supply_base ∈ [0,100] indices (already "normed").
+ * Primary spatial key: zone_id = sh:z:{type}:{slug} (WS-B zones, frozen).
+ * Fine-grid heat: sh:f:{cell_m}:{row}:{col} inherits nearest zone × distance decay.
+ * Legacy 1km grids.json is NOT the product metric spine (ui_default_layer=false).
  *
- *   demand_base = clamp0_100(
- *     BASE_DEMAND[landuse]
- *     * TOD_DEMAND[time][landuse]
- *     * labelBoost(labels)          // lingang / hub / cbd
- *     * (0.92 + 0.16 * hash01)      // mild spatial noise
- *     * invalidFactor               // is_valid=false → near-zero
- *   )
+ * ── Zone × TOD shape (05.1 §4.3 direction-locked) ───────────────────
+ * dense_mass residential → ride/delivery strong at wd_am + wd_pm
+ * office/CBD             → ride noon/pm tide; delivery midday medium
+ * retail premium         → o2o strong we_aft / weekend evening
+ * hub                    → ride pulse all day; delivery weak–mid
+ * scenic                 → weekend/holiday pulse (we_aft + national_day bias)
  *
- *   supply_base = clamp0_100(
- *     BASE_SUPPLY[landuse]
- *     * TOD_SUPPLY[time][landuse]
- *     * labelSupplyBoost(labels)
- *     * (0.92 + 0.16 * hash01b)
- *     * invalidFactor
- *   )
+ * grade multipliers on base (retail/residential).
  *
- * Landuse narrative:
- *   office      → wd_pm_peak demand high (off-work outbound); am moderate inbound
- *   residential → wd_am_peak demand high (commute out); wd_pm_peak supply up (return/home pool)
- *   hub/airport → structural demand>supply for long-haul story
- *   lingang*    → amplify demand/supply spread (remote belt)
- *   retail      → we_aft demand peak
+ * Runtime (WS-D):
+ *   demand = demand_base * weather.demand_{scene} * node_coeff
+ *   supply = supply_base * weather.supply_{scene} * node_coeff / difficulty_{scene}
+ *   gap    = demand - supply   // identity norm on 0–100 bases
+ * difficulty from data/static/congestion_coeff.json (citywide + corridor extras).
  *
- * Runtime (WS-D), see contracts/scene-gap.schema.json:
- *   demand = demand_base * weather_coeff[w].demand_ride * node_coeff
- *   supply = supply_base * weather_coeff[w].supply_ride * node_coeff
- *   gap    = demand - supply   // identity norm on 0–100 indices
- *
- * Chg: sparser rows (valid + non-other landuse or label hit).
- * Chargers: 50–200 GCJ points near retail/hub anchors, name 小李充电-NNN.
+ * Entities: 小李充电 800–1500; 小李门店 1500–3000; GCJ near zones.
  */
 const fs = require("fs");
 const path = require("path");
 const { root } = require("./lib/paths");
 
-const GRIDS = root("data", "processed", "grids.json");
+const ZONES = root("data", "processed", "zones_shanghai.json");
+const FINE = root("data", "processed", "grids_fine.json");
 const ANCHORS = root("data", "static", "anchors_shanghai.json");
+
+const OUT_ZONE = root("data", "processed", "metrics_zone.json");
 const OUT_RIDE = root("data", "processed", "metrics_ride.json");
+const OUT_DEL = root("data", "processed", "metrics_delivery.json");
 const OUT_CHG = root("data", "processed", "metrics_chg.json");
+const OUT_O2O = root("data", "processed", "metrics_o2o.json");
+const OUT_HEAT = root("data", "processed", "metrics_heat_fine.json");
 const OUT_CHG_ENT = root("data", "processed", "entities_charger.json");
+const OUT_STORE = root("data", "processed", "entities_store.json");
 
 const TIMES = ["wd_am_peak", "wd_pm_peak", "we_aft"];
+const SCENES = ["ride", "delivery", "chg", "o2o"];
 
-/** Base demand level by landuse (clear/baseline shape) */
-const BASE_DEMAND = {
-  office: 62,
-  residential: 48,
-  retail: 55,
-  hub: 70,
-  industrial_park: 42,
-  scenic: 38,
-  mixed: 44,
-  other: 22
-};
-
-/** Base supply (fleet presence) — often lag demand in hubs/CBD */
-const BASE_SUPPLY = {
-  office: 48,
-  residential: 52,
-  retail: 50,
-  hub: 42,
-  industrial_park: 40,
-  scenic: 35,
-  mixed: 46,
-  other: 28
-};
-
-/**
- * TOD multipliers on demand. office pm high; residential am high; retail weekend aft.
- */
-const TOD_DEMAND = {
-  wd_am_peak: {
-    office: 1.05,
-    residential: 1.35,
-    retail: 0.85,
-    hub: 1.25,
-    industrial_park: 1.15,
-    scenic: 0.7,
-    mixed: 1.1,
-    other: 0.9
+/** Base demand/supply by zone_type (clear/baseline skeleton) */
+const TYPE_BASE = {
+  retail: {
+    ride: [52, 48],
+    delivery: [48, 46],
+    chg: [55, 42],
+    o2o: [62, 50]
   },
-  wd_pm_peak: {
-    office: 1.45,
-    residential: 0.95,
-    retail: 1.15,
-    hub: 1.3,
-    industrial_park: 1.2,
-    scenic: 0.85,
-    mixed: 1.15,
-    other: 0.95
+  residential: {
+    ride: [50, 50],
+    delivery: [58, 44],
+    chg: [40, 36],
+    o2o: [42, 40]
   },
-  we_aft: {
-    office: 0.55,
-    residential: 1.05,
-    retail: 1.4,
-    hub: 1.2,
-    industrial_park: 0.5,
-    scenic: 1.35,
-    mixed: 1.1,
-    other: 0.85
+  office: {
+    ride: [60, 46],
+    delivery: [50, 42],
+    chg: [48, 38],
+    o2o: [45, 42]
+  },
+  industrial: {
+    ride: [38, 40],
+    delivery: [36, 38],
+    chg: [44, 40],
+    o2o: [28, 30]
+  },
+  hub: {
+    ride: [72, 40],
+    delivery: [40, 38],
+    chg: [58, 45],
+    o2o: [30, 32]
+  },
+  scenic: {
+    ride: [42, 36],
+    delivery: [40, 38],
+    chg: [35, 30],
+    o2o: [48, 40]
+  },
+  rural: {
+    ride: [22, 28],
+    delivery: [20, 26],
+    chg: [18, 22],
+    o2o: [16, 20]
   }
 };
 
 /**
- * TOD supply: residential pm return pool ↑; office pm fleet thinner relative to demand.
+ * TOD multipliers [demand, supply] by type — 05.1 table directions.
  */
-const TOD_SUPPLY = {
+const TOD_MUL = {
   wd_am_peak: {
-    office: 1.1,
-    residential: 0.85,
-    retail: 0.95,
-    hub: 0.9,
-    industrial_park: 1.0,
-    scenic: 0.8,
-    mixed: 1.0,
-    other: 0.95
+    retail: { ride: [0.9, 0.95], delivery: [0.95, 1.0], chg: [0.85, 1.0], o2o: [0.75, 0.95] },
+    residential: { ride: [1.4, 0.85], delivery: [1.35, 0.88], chg: [0.9, 1.0], o2o: [0.85, 0.95] },
+    office: { ride: [1.15, 1.05], delivery: [1.1, 1.0], chg: [0.95, 1.0], o2o: [1.05, 1.0] },
+    industrial: { ride: [1.2, 1.0], delivery: [1.05, 1.0], chg: [1.0, 1.0], o2o: [0.7, 0.9] },
+    hub: { ride: [1.35, 0.9], delivery: [0.95, 0.95], chg: [1.1, 0.95], o2o: [0.8, 0.9] },
+    scenic: { ride: [0.75, 0.85], delivery: [0.8, 0.9], chg: [0.7, 0.9], o2o: [0.7, 0.85] },
+    rural: { ride: [0.95, 1.0], delivery: [0.9, 1.0], chg: [0.85, 1.0], o2o: [0.7, 0.9] }
   },
   wd_pm_peak: {
-    office: 0.88,
-    residential: 1.25,
-    retail: 1.05,
-    hub: 0.85,
-    industrial_park: 0.95,
-    scenic: 0.9,
-    mixed: 1.05,
-    other: 1.0
+    retail: { ride: [1.2, 1.0], delivery: [1.25, 0.95], chg: [1.15, 0.95], o2o: [1.15, 1.0] },
+    residential: { ride: [1.25, 1.2], delivery: [1.4, 0.9], chg: [1.05, 0.95], o2o: [1.0, 1.0] },
+    office: { ride: [1.5, 0.88], delivery: [1.15, 0.92], chg: [1.2, 0.9], o2o: [0.95, 0.95] },
+    industrial: { ride: [1.15, 0.95], delivery: [1.0, 0.95], chg: [1.05, 0.95], o2o: [0.65, 0.9] },
+    hub: { ride: [1.4, 0.85], delivery: [1.05, 0.9], chg: [1.2, 0.9], o2o: [0.85, 0.9] },
+    scenic: { ride: [0.95, 0.9], delivery: [0.95, 0.9], chg: [0.85, 0.9], o2o: [1.0, 0.95] },
+    rural: { ride: [0.9, 1.0], delivery: [0.95, 1.0], chg: [0.9, 1.0], o2o: [0.75, 0.95] }
   },
   we_aft: {
-    office: 0.7,
-    residential: 1.1,
-    retail: 1.15,
-    hub: 0.95,
-    industrial_park: 0.65,
-    scenic: 1.1,
-    mixed: 1.05,
-    other: 0.95
+    retail: { ride: [1.15, 1.05], delivery: [1.2, 1.0], chg: [1.25, 0.9], o2o: [1.45, 1.05] },
+    residential: { ride: [1.05, 1.1], delivery: [1.2, 1.0], chg: [1.1, 0.95], o2o: [1.15, 1.0] },
+    office: { ride: [0.55, 0.7], delivery: [0.65, 0.75], chg: [0.7, 0.8], o2o: [0.6, 0.75] },
+    industrial: { ride: [0.5, 0.7], delivery: [0.55, 0.75], chg: [0.6, 0.8], o2o: [0.45, 0.7] },
+    hub: { ride: [1.25, 0.95], delivery: [1.0, 0.95], chg: [1.15, 0.95], o2o: [0.9, 0.95] },
+    scenic: { ride: [1.4, 1.0], delivery: [1.15, 0.95], chg: [1.0, 0.9], o2o: [1.3, 1.0] },
+    rural: { ride: [0.85, 0.95], delivery: [0.9, 0.95], chg: [0.8, 0.95], o2o: [0.8, 0.9] }
   }
 };
+
+/** Grade multipliers on demand (supply milder) */
+const GRADE_DEMAND = {
+  // retail
+  premium: 1.22,
+  mass: 1.05,
+  community: 0.92,
+  // residential
+  dense_mass: 1.2,
+  improve: 1.0,
+  premium_low: 0.78
+};
+const GRADE_SUPPLY = {
+  premium: 0.95,
+  mass: 1.0,
+  community: 1.05,
+  dense_mass: 0.92,
+  improve: 1.0,
+  premium_low: 1.08
+};
+
+const CHARGER_TARGET = 1100;
+const STORE_TARGET = 2200;
 
 function clamp100(x) {
   if (x < 0) return 0;
@@ -152,7 +153,6 @@ function clamp100(x) {
   return Math.round(x * 10) / 10;
 }
 
-/** FNV-ish stable hash → [0,1) from string */
 function hash01(s) {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) {
@@ -160,120 +160,6 @@ function hash01(s) {
     h = Math.imul(h, 16777619);
   }
   return (h >>> 0) / 4294967296;
-}
-
-function hasLabel(labels, keys) {
-  const set = new Set(labels || []);
-  return keys.some((k) => set.has(k));
-}
-
-function labelDemandBoost(labels) {
-  let m = 1;
-  if (hasLabel(labels, ["lingang", "lingang_belt"])) m *= 1.22;
-  if (hasLabel(labels, ["lujiazui", "cbd", "finance"])) m *= 1.18;
-  if (hasLabel(labels, ["hongqiao", "pvg", "airport", "rail", "metro_hub"])) m *= 1.15;
-  if (hasLabel(labels, ["water_edge"])) m *= 0.15;
-  return m;
-}
-
-function labelSupplyBoost(labels) {
-  let m = 1;
-  // remote belt: supply thinner → long-haul gap story
-  if (hasLabel(labels, ["lingang", "lingang_belt"])) m *= 0.78;
-  if (hasLabel(labels, ["lujiazui", "cbd"])) m *= 0.92;
-  if (hasLabel(labels, ["hongqiao", "pvg", "airport"])) m *= 0.88;
-  if (hasLabel(labels, ["water_edge"])) m *= 0.2;
-  return m;
-}
-
-function rideRow(cell, tod) {
-  const lu = BASE_DEMAND[cell.landuse] != null ? cell.landuse : "other";
-  const inv = cell.is_valid === false ? 0.08 : 1;
-  const n1 = 0.92 + 0.16 * hash01(`${cell.grid_id}|d|${tod}`);
-  const n2 = 0.92 + 0.16 * hash01(`${cell.grid_id}|s|${tod}`);
-  const td = (TOD_DEMAND[tod] && TOD_DEMAND[tod][lu]) || 1;
-  const ts = (TOD_SUPPLY[tod] && TOD_SUPPLY[tod][lu]) || 1;
-  const demand_base = clamp100(
-    BASE_DEMAND[lu] * td * labelDemandBoost(cell.labels) * n1 * inv
-  );
-  const supply_base = clamp100(
-    BASE_SUPPLY[lu] * ts * labelSupplyBoost(cell.labels) * n2 * inv
-  );
-  return {
-    grid_id: cell.grid_id,
-    scene: "ride",
-    time_of_day: tod,
-    demand_base,
-    supply_base
-  };
-}
-
-function chgRow(cell, tod) {
-  const lu = BASE_DEMAND[cell.landuse] != null ? cell.landuse : "other";
-  const inv = cell.is_valid === false ? 0.05 : 1;
-  // EV demand: retail/hub/office evening-ish; supply from "pile capacity proxy"
-  const demLu = {
-    office: 50,
-    residential: 42,
-    retail: 58,
-    hub: 55,
-    industrial_park: 48,
-    scenic: 40,
-    mixed: 45,
-    other: 18
-  };
-  const supLu = {
-    office: 40,
-    residential: 38,
-    retail: 44,
-    hub: 48,
-    industrial_park: 42,
-    scenic: 30,
-    mixed: 40,
-    other: 22
-  };
-  const todD = {
-    wd_am_peak: 0.85,
-    wd_pm_peak: 1.15,
-    we_aft: 1.25
-  };
-  const todS = {
-    wd_am_peak: 1.0,
-    wd_pm_peak: 0.95,
-    we_aft: 0.9
-  };
-  let dBoost = 1;
-  let sBoost = 1;
-  if (hasLabel(cell.labels, ["lingang", "lingang_belt"])) {
-    dBoost *= 1.1;
-    sBoost *= 0.75;
-  }
-  if (hasLabel(cell.labels, ["lujiazui", "cbd", "commercial", "mall"])) {
-    dBoost *= 1.12;
-  }
-  const n1 = 0.9 + 0.2 * hash01(`${cell.grid_id}|cd|${tod}`);
-  const n2 = 0.9 + 0.2 * hash01(`${cell.grid_id}|cs|${tod}`);
-  return {
-    grid_id: cell.grid_id,
-    scene: "chg",
-    time_of_day: tod,
-    demand_base: clamp100(demLu[lu] * (todD[tod] || 1) * dBoost * n1 * inv),
-    supply_base: clamp100(supLu[lu] * (todS[tod] || 1) * sBoost * n2 * inv)
-  };
-}
-
-function wantChgMetrics(cell) {
-  if (cell.is_valid === false) return false;
-  if (cell.landuse && cell.landuse !== "other") return true;
-  return hasLabel(cell.labels, [
-    "lingang",
-    "lingang_belt",
-    "core_urban",
-    "lujiazui",
-    "cbd",
-    "hongqiao",
-    "pvg"
-  ]);
 }
 
 function distM(lng1, lat1, lng2, lat2) {
@@ -287,159 +173,398 @@ function distM(lng1, lat1, lng2, lat2) {
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
+function labelBoost(labels, scene) {
+  const set = new Set(labels || []);
+  let d = 1;
+  let s = 1;
+  if (set.has("lingang") || set.has("new_town")) {
+    d *= scene === "ride" || scene === "delivery" ? 1.15 : 1.08;
+    s *= 0.82;
+  }
+  if (set.has("cbd") || set.has("finance") || set.has("lujiazui")) {
+    if (scene === "ride") {
+      d *= 1.12;
+      s *= 0.9;
+    }
+  }
+  if (set.has("airport") || set.has("rail") || set.has("metro")) {
+    if (scene === "ride") {
+      d *= 1.1;
+      s *= 0.88;
+    }
+  }
+  return { d, s };
+}
+
+function zoneBases(z, scene, tod) {
+  const zt = TYPE_BASE[z.zone_type] ? z.zone_type : "rural";
+  const [bd, bs] = TYPE_BASE[zt][scene] || [30, 30];
+  const tm = (TOD_MUL[tod] && TOD_MUL[tod][zt] && TOD_MUL[tod][zt][scene]) || [
+    1, 1
+  ];
+  const gd = (z.grade && GRADE_DEMAND[z.grade]) || 1;
+  const gs = (z.grade && GRADE_SUPPLY[z.grade]) || 1;
+  const lb = labelBoost(z.labels, scene);
+  const n1 = 0.92 + 0.16 * hash01(`${z.zone_id}|${scene}|d|${tod}`);
+  const n2 = 0.92 + 0.16 * hash01(`${z.zone_id}|${scene}|s|${tod}`);
+  const demand_base = clamp100(bd * tm[0] * gd * lb.d * n1);
+  const supply_base = clamp100(bs * tm[1] * gs * lb.s * n2);
+  return { demand_base, supply_base };
+}
+
+function metricRow(z, scene, tod) {
+  const { demand_base, supply_base } = zoneBases(z, scene, tod);
+  return {
+    zone_id: z.zone_id,
+    // compat: D indexByGrid may still key on grid_id — alias zone for zone-mode
+    grid_id: z.zone_id,
+    unit_kind: "zone",
+    scene,
+    time_of_day: tod,
+    demand_base,
+    supply_base,
+    zone_type: z.zone_type,
+    grade: z.grade || null
+  };
+}
+
+function nearestZone(lng, lat, zones, cacheHint) {
+  let best = cacheHint || null;
+  let bestD = best
+    ? distM(lng, lat, best.centroid_lng, best.centroid_lat)
+    : Infinity;
+  // if hint already close, keep
+  if (best && bestD < 800) return { zone: best, d: bestD };
+  for (const z of zones) {
+    const d = distM(lng, lat, z.centroid_lng, z.centroid_lat);
+    if (d < bestD) {
+      bestD = d;
+      best = z;
+    }
+  }
+  return { zone: best, d: bestD };
+}
+
 /**
- * Place 小李 chargers near retail/hub anchors (GCJ jitter).
- * Target 80–160 points.
+ * Scatter entities around zone centroids (ellipse-ish using rx_m/ry_m).
  */
-function buildChargers(anchors, grids) {
-  const seeds = (anchors.anchors || []).filter((a) =>
-    ["retail", "hub", "mixed", "office", "scenic"].includes(a.landuse)
-  );
+function scatterEntities(zones, kind, target) {
+  const brand = kind === "charger" ? "小李充电" : "小李门店";
+  const prefix = kind === "charger" ? "xl_chg" : "xl_store";
+  // weight by type suitability
+  const weight = (z) => {
+    const t = z.zone_type;
+    if (kind === "charger") {
+      if (t === "retail" || t === "hub") return 3.2;
+      if (t === "office" || t === "residential") return 2.2;
+      if (t === "industrial") return 1.4;
+      if (t === "scenic") return 1.0;
+      return 0.35;
+    }
+    // store
+    if (t === "retail") return 3.5;
+    if (t === "residential") return 2.8;
+    if (t === "office") return 1.6;
+    if (t === "hub") return 1.2;
+    if (t === "scenic") return 1.0;
+    return 0.3;
+  };
+
+  const pool = zones.filter((z) => weight(z) > 0.4);
+  const totalW = pool.reduce((s, z) => s + weight(z), 0);
   const entities = [];
   let seq = 1;
-  const TARGET = 120;
 
-  for (const a of seeds) {
-    const nNear = a.landuse === "hub" || a.landuse === "retail" ? 10 : 6;
-    for (let i = 0; i < nNear && entities.length < TARGET; i++) {
-      const h = hash01(`${a.id}|chg|${i}`);
-      const h2 = hash01(`${a.id}|chg2|${i}`);
-      // ~80–600m GCJ offset
+  for (const z of pool) {
+    const n = Math.max(1, Math.round((weight(z) / totalW) * target));
+    const rx = (z.rx_m || 600) / 111320;
+    const ry =
+      (z.ry_m || 500) / (111320 * Math.cos((z.centroid_lat * Math.PI) / 180));
+    for (let i = 0; i < n && entities.length < target + 50; i++) {
+      const h = hash01(`${z.zone_id}|${kind}|${i}`);
+      const h2 = hash01(`${z.zone_id}|${kind}|r|${i}`);
       const ang = h * Math.PI * 2;
-      const rDeg = (0.0008 + h2 * 0.0045) ; // ~80m–500m
-      const lng = Math.round((a.lng + Math.cos(ang) * rDeg) * 1e6) / 1e6;
-      const lat = Math.round((a.lat + Math.sin(ang) * rDeg * 0.85) * 1e6) / 1e6;
-      const stalls = 4 + Math.floor(hash01(`${a.id}|st|${i}`) * 13); // 4–16
-      const power_kw = hash01(`${a.id}|pw|${i}`) > 0.55 ? 120 : 60;
-      entities.push({
-        entity_id: `xl_chg_${String(seq).padStart(3, "0")}`,
-        brand: "小李充电",
-        name: `小李充电-${String(seq).padStart(3, "0")}`,
-        lng,
-        lat,
-        crs: "GCJ-02",
-        stalls,
-        power_kw,
-        status: "open",
-        anchor_ref: a.id,
-        synthetic: true
-      });
+      const rad = 0.15 + 0.85 * Math.sqrt(h2);
+      const lng =
+        Math.round((z.centroid_lng + Math.cos(ang) * rx * rad) * 1e6) / 1e6;
+      const lat =
+        Math.round((z.centroid_lat + Math.sin(ang) * ry * rad) * 1e6) / 1e6;
+      const id = `${prefix}_${String(seq).padStart(4, "0")}`;
+      if (kind === "charger") {
+        entities.push({
+          entity_id: id,
+          brand,
+          name: `${brand}-${String(seq).padStart(4, "0")}`,
+          lng,
+          lat,
+          crs: "GCJ-02",
+          stalls: 4 + Math.floor(hash01(`${id}|st`) * 13),
+          power_kw: hash01(`${id}|pw`) > 0.5 ? 120 : 60,
+          status: "open",
+          zone_id: z.zone_id,
+          synthetic: true
+        });
+      } else {
+        entities.push({
+          entity_id: id,
+          brand,
+          name: `${brand}-${String(seq).padStart(4, "0")}`,
+          lng,
+          lat,
+          crs: "GCJ-02",
+          store_type: z.zone_type === "retail" ? "flagship_or_mall" : "community",
+          status: "open",
+          zone_id: z.zone_id,
+          synthetic: true
+        });
+      }
       seq++;
     }
   }
 
-  // fill toward TARGET using mixed grids near core if short
-  if (entities.length < 50) {
-    const pool = grids.filter(
-      (c) =>
-        c.is_valid !== false &&
-        (c.landuse === "retail" || c.landuse === "hub" || c.landuse === "mixed")
-    );
-    let i = 0;
-    while (entities.length < 50 && i < pool.length) {
-      const c = pool[i++];
-      const h = hash01(`${c.grid_id}|fill`);
-      if (h < 0.4) continue;
-      entities.push({
-        entity_id: `xl_chg_${String(seq).padStart(3, "0")}`,
-        brand: "小李充电",
-        name: `小李充电-${String(seq).padStart(3, "0")}`,
-        lng: c.cell_lng,
-        lat: c.cell_lat,
-        crs: "GCJ-02",
-        stalls: 6,
-        power_kw: 60,
-        status: "open",
-        anchor_ref: null,
-        grid_id: c.grid_id,
-        synthetic: true
-      });
-      seq++;
-    }
+  // trim/pad to band
+  if (entities.length > target) entities.length = target;
+  while (entities.length < Math.min(target, kind === "charger" ? 800 : 1500)) {
+    const z = pool[entities.length % pool.length];
+    const h = hash01(`pad|${kind}|${entities.length}`);
+    const lng = Math.round((z.centroid_lng + (h - 0.5) * 0.01) * 1e6) / 1e6;
+    const lat =
+      Math.round((z.centroid_lat + (hash01(`pad2|${entities.length}`) - 0.5) * 0.008) *
+        1e6) / 1e6;
+    seq++;
+    const id = `${prefix}_${String(seq).padStart(4, "0")}`;
+    entities.push({
+      entity_id: id,
+      brand,
+      name: `${brand}-${String(seq).padStart(4, "0")}`,
+      lng,
+      lat,
+      crs: "GCJ-02",
+      status: "open",
+      zone_id: z.zone_id,
+      synthetic: true,
+      ...(kind === "charger"
+        ? { stalls: 6, power_kw: 60 }
+        : { store_type: "community" })
+    });
   }
-
   return entities;
 }
 
+function writeMetricsDoc(scene, rows, extra) {
+  return {
+    version: "0.2.0",
+    synthetic: true,
+    scene,
+    unit_kind_primary: "zone",
+    time_of_day_keys: TIMES,
+    unit: "index_0_100",
+    zone_id_rule: "sh:z:{type}:{slug}",
+    count: rows.length,
+    ...extra,
+    rows
+  };
+}
+
 function main() {
-  if (!fs.existsSync(GRIDS)) {
-    console.error("missing grids.json — run build:grids / build:landuse first");
+  if (!fs.existsSync(ZONES)) {
+    console.error("BLOCKED: missing zones_shanghai.json — run npm run build:zones");
+    console.error(
+      "Minimal zone fields: zone_id, name, zone_type, grade, centroid_lng/lat, labels, rx_m/ry_m"
+    );
     process.exit(1);
   }
-  const pack = JSON.parse(fs.readFileSync(GRIDS, "utf8"));
-  const grids = pack.grids || [];
-  if (!grids.length) {
-    console.error("grids empty");
+  const zdoc = JSON.parse(fs.readFileSync(ZONES, "utf8"));
+  const zones = zdoc.zones || [];
+  if (zones.length < 10) {
+    console.error("zones too few:", zones.length);
     process.exit(1);
   }
-  // freeze check: id rule from B
-  if (pack.grid_id_rule && pack.grid_id_rule !== "sh:{cell_m}:{row}:{col}") {
-    console.warn("unexpected grid_id_rule:", pack.grid_id_rule);
-  }
-  const sampleId = grids[0].grid_id;
-  // avoid /[A-Za-z]:\\/ portable-path false positive on char-class digraphs
-  const GRID_ID_OK = new RegExp("^sh:" + "[0-9]+" + ":" + "[0-9]+" + ":" + "[0-9]+" + "$");
-  if (!GRID_ID_OK.test(sampleId)) {
-    console.error("grid_id format mismatch:", sampleId);
-    process.exit(1);
+  if (zdoc.zone_id_rule && zdoc.zone_id_rule !== "sh:z:{type}:{slug}") {
+    console.warn("unexpected zone_id_rule", zdoc.zone_id_rule);
   }
 
-  const ride = [];
-  const chg = [];
-  for (const cell of grids) {
+  const allZoneRows = [];
+  const byScene = { ride: [], delivery: [], chg: [], o2o: [] };
+
+  for (const z of zones) {
     for (const tod of TIMES) {
-      ride.push(rideRow(cell, tod));
-      if (wantChgMetrics(cell)) chg.push(chgRow(cell, tod));
+      for (const scene of SCENES) {
+        const row = metricRow(z, scene, tod);
+        allZoneRows.push(row);
+        byScene[scene].push(row);
+      }
     }
   }
 
-  const anchors = JSON.parse(fs.readFileSync(ANCHORS, "utf8"));
-  const chargers = buildChargers(anchors, grids);
-  if (chargers.length < 50 || chargers.length > 200) {
-    console.error(`charger count out of range: ${chargers.length}`);
+  // Fine-grid heat: ride + delivery demand/supply from nearest zone (decay)
+  const heatRows = [];
+  let fineCount = 0;
+  if (fs.existsSync(FINE)) {
+    const fdoc = JSON.parse(fs.readFileSync(FINE, "utf8"));
+    const cells = fdoc.grids || [];
+    fineCount = cells.length;
+    // spatial grid bucket for faster NN (0.05 deg ~5km)
+    const bucket = new Map();
+    function bkey(lng, lat) {
+      return `${Math.floor(lng * 20)}_${Math.floor(lat * 20)}`;
+    }
+    for (const z of zones) {
+      const k = bkey(z.centroid_lng, z.centroid_lat);
+      if (!bucket.has(k)) bucket.set(k, []);
+      bucket.get(k).push(z);
+    }
+    function nn(lng, lat) {
+      const bx = Math.floor(lng * 20);
+      const by = Math.floor(lat * 20);
+      let cand = [];
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          const arr = bucket.get(`${bx + dx}_${by + dy}`);
+          if (arr) cand = cand.concat(arr);
+        }
+      }
+      if (!cand.length) cand = zones;
+      let best = cand[0];
+      let bestD = Infinity;
+      for (const z of cand) {
+        const d = distM(lng, lat, z.centroid_lng, z.centroid_lat);
+        if (d < bestD) {
+          bestD = d;
+          best = z;
+        }
+      }
+      return { zone: best, d: bestD };
+    }
+
+    // heat scenes: ride + delivery only (size control)
+    for (const cell of cells) {
+      if (cell.is_valid === false) continue;
+      const { zone, d } = nn(cell.cell_lng, cell.cell_lat);
+      // influence radius ~ zone size + buffer
+      const R = Math.max(zone.rx_m || 800, zone.ry_m || 800) * 1.8;
+      const decay = d > R * 2.5 ? 0.08 : Math.max(0.12, 1 - d / (R * 2.5));
+      for (const tod of TIMES) {
+        for (const scene of ["ride", "delivery"]) {
+          const { demand_base, supply_base } = zoneBases(zone, scene, tod);
+          heatRows.push({
+            grid_id: cell.grid_id,
+            zone_id: zone.zone_id,
+            unit_kind: "fine_grid",
+            cell_m: cell.cell_m,
+            scene,
+            time_of_day: tod,
+            demand_base: clamp100(demand_base * decay),
+            supply_base: clamp100(supply_base * Math.min(1.05, decay + 0.08))
+          });
+        }
+      }
+    }
+  } else {
+    console.warn(
+      "grids_fine.json missing — metrics_heat_fine skipped; D may rasterize zones client-side"
+    );
+  }
+
+  const chargers = scatterEntities(zones, "charger", CHARGER_TARGET);
+  const stores = scatterEntities(zones, "store", STORE_TARGET);
+
+  if (chargers.length < 800 || chargers.length > 1500) {
+    console.error("charger count out of PRD band:", chargers.length);
+    process.exit(1);
+  }
+  if (stores.length < 1500 || stores.length > 3000) {
+    console.error("store count out of PRD band:", stores.length);
     process.exit(1);
   }
 
-  const rideDoc = {
-    version: "0.1.0",
-    synthetic: true,
-    scene: "ride",
-    time_of_day_keys: TIMES,
-    unit: "index_0_100",
-    grid_id_rule: pack.grid_id_rule || "sh:{cell_m}:{row}:{col}",
-    count: ride.length,
-    rows: ride
-  };
-  const chgDoc = {
-    version: "0.1.0",
-    synthetic: true,
-    scene: "chg",
-    time_of_day_keys: TIMES,
-    unit: "index_0_100",
-    sparse: true,
-    count: chg.length,
-    rows: chg
-  };
-  const entDoc = {
-    version: "0.1.0",
-    synthetic: true,
-    brand: "小李充电",
-    crs: "GCJ-02",
-    count: chargers.length,
-    entities: chargers
-  };
-
-  fs.mkdirSync(path.dirname(OUT_RIDE), { recursive: true });
-  fs.writeFileSync(OUT_RIDE, JSON.stringify(rideDoc));
-  fs.writeFileSync(OUT_CHG, JSON.stringify(chgDoc));
-  fs.writeFileSync(OUT_CHG_ENT, JSON.stringify(entDoc, null, 2));
+  fs.mkdirSync(path.dirname(OUT_ZONE), { recursive: true });
+  fs.writeFileSync(
+    OUT_ZONE,
+    JSON.stringify({
+      version: "0.2.0",
+      synthetic: true,
+      unit_kind_primary: "zone",
+      scenes: SCENES,
+      time_of_day_keys: TIMES,
+      zone_id_rule: zdoc.zone_id_rule || "sh:z:{type}:{slug}",
+      count: allZoneRows.length,
+      rows: allZoneRows
+    })
+  );
+  fs.writeFileSync(
+    OUT_RIDE,
+    JSON.stringify(
+      writeMetricsDoc("ride", byScene.ride, {
+        depth: "deep",
+        note: "zone-primary; grid_id aliases zone_id for legacy loaders"
+      })
+    )
+  );
+  fs.writeFileSync(
+    OUT_DEL,
+    JSON.stringify(writeMetricsDoc("delivery", byScene.delivery, { depth: "deep" }))
+  );
+  fs.writeFileSync(
+    OUT_CHG,
+    JSON.stringify(writeMetricsDoc("chg", byScene.chg, { depth: "medium" }))
+  );
+  fs.writeFileSync(
+    OUT_O2O,
+    JSON.stringify(writeMetricsDoc("o2o", byScene.o2o, { depth: "medium" }))
+  );
+  fs.writeFileSync(
+    OUT_HEAT,
+    JSON.stringify({
+      version: "0.2.0",
+      synthetic: true,
+      unit_kind: "fine_grid",
+      purpose: "heat_mode_fine_grid",
+      scenes: ["ride", "delivery"],
+      time_of_day_keys: TIMES,
+      grid_id_rule: "sh:f:{cell_m}:{row}:{col}",
+      fine_cells_source: fineCount,
+      count: heatRows.length,
+      note: "Same indicator family as zone metrics; decay from nearest zone centroid. KDE left to D.",
+      rows: heatRows
+    })
+  );
+  fs.writeFileSync(
+    OUT_CHG_ENT,
+    JSON.stringify(
+      {
+        version: "0.2.0",
+        synthetic: true,
+        brand: "小李充电",
+        crs: "GCJ-02",
+        count: chargers.length,
+        entities: chargers
+      },
+      null,
+      2
+    )
+  );
+  fs.writeFileSync(
+    OUT_STORE,
+    JSON.stringify(
+      {
+        version: "0.2.0",
+        synthetic: true,
+        brand: "小李门店",
+        crs: "GCJ-02",
+        count: stores.length,
+        entities: stores
+      },
+      null,
+      2
+    )
+  );
 
   console.log(
-    `synthetic: ride_rows=${ride.length} chg_rows=${chg.length} chargers=${chargers.length}`
+    `synthetic(zone): zones=${zones.length} zone_rows=${allZoneRows.length} heat=${heatRows.length} chargers=${chargers.length} stores=${stores.length}`
   );
-  console.log(`  → data/processed/metrics_ride.json`);
-  console.log(`  → data/processed/metrics_chg.json`);
-  console.log(`  → data/processed/entities_charger.json`);
+  console.log("  → metrics_zone / ride / delivery / chg / o2o / heat_fine");
+  console.log("  → entities_charger / entities_store");
 }
 
 main();

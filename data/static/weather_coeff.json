@@ -1,29 +1,41 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "synthetic": true,
-  "description": "Sandbox weather multipliers for scene A/B. Not real meteorology. Keys used at runtime by WS-D.",
-  "formula_note": "demand = demand_base * demand_ride * node_coeff; supply = supply_base * supply_ride * node_coeff",
+  "description": "Sandbox weather multipliers for scene A/B (05.1 multi-scene). Not real meteorology.",
+  "formula_note": "demand = demand_base * demand_{scene} * node_coeff; supply = supply_base * supply_{scene} * node_coeff / difficulty_{scene}",
   "coeffs": {
     "clear": {
       "demand_ride": 1.0,
       "supply_ride": 1.0,
+      "demand_delivery": 1.0,
+      "supply_delivery": 1.0,
       "demand_chg": 1.0,
       "supply_chg": 1.0,
+      "demand_o2o": 1.0,
+      "supply_o2o": 1.0,
       "note": "baseline fair weather"
     },
     "rain": {
       "demand_ride": 1.18,
       "supply_ride": 0.82,
+      "demand_delivery": 1.22,
+      "supply_delivery": 0.78,
       "demand_chg": 1.05,
       "supply_chg": 0.95,
-      "note": "ride demand up, effective fleet down (speed/accept); chg mild"
+      "demand_o2o": 0.88,
+      "supply_o2o": 0.92,
+      "note": "ride/delivery demand up supply down; o2o foot traffic down"
     },
     "extreme": {
       "demand_ride": 0.72,
       "supply_ride": 0.55,
+      "demand_delivery": 0.85,
+      "supply_delivery": 0.5,
       "demand_chg": 0.8,
       "supply_chg": 0.7,
-      "note": "suppressed travel + contracted supply; drill only, not siting baseline"
+      "demand_o2o": 0.55,
+      "supply_o2o": 0.6,
+      "note": "drill only"
     }
   }
 }

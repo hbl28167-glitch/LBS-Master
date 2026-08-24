@@ -1,71 +1,78 @@
-# HANDOFF WS-C
+# HANDOFF WS-C (05.1 zone-driven)
 
 - branch: `master`
-- feat commit: `da91ce0` - `feat(data): synthetic ride metrics and coeffs`
-- depends: WS-B (`grids.json` grid_id frozen `sh:{cell_m}:{row}:{col}`)
-- business data: **all Synthetic** (manifest / file header `synthetic: true`)
+- feat commit: (see `git log -1 --grep synthetic`)
+- depends: **WS-B zones** (`zone_id` frozen) + optional `grids_fine` for heat
+- business data: **all Synthetic**
+- status: **UNBLOCKED** (zones present: 118)
+
+## Upstream zone
+
+| item | value |
+|------|--------|
+| id rule | `sh:z:{type}:{slug}` |
+| source | `data/processed/zones_shanghai.json` |
+| fields used | zone_id, zone_type, grade, centroid_*, labels, rx_m, ry_m |
+| HANDOFF | `docs/HANDOFF-WS-B-zones.md` |
+
+If zones missing: build exits BLOCKED with minimal field list.
+
+**Not blocked on per-way congestion:** citywide + corridor multipliers in `congestion_coeff.json` (tech debt noted there; B2 road color stays separate).
 
 ## How to run
 
 ```bash
-# synthetic only (grids already built)
 npm run build:synthetic
 npm run verify:synthetic
-# print clear vs rain for a grid
-node scripts/verify-synthetic.js sh:1000:69:61
-
-# full pipeline (geo + synthetic + manifest)
-npm run build
+node scripts/verify-synthetic.js sh:z:office:office_lujiazui
+npm run build:manifest
+npm run copy:public-data
 ```
 
-## Artifacts (this machine build)
+## Artifacts (this machine)
 
-| path | note | size |
-|------|------|------|
-| `data/static/weather_coeff.json` | clear / rain / extreme | ~0.9 KB |
-| `data/static/calendar.json` | baseline + national_day | ~0.7 KB |
-| `data/processed/metrics_ride.json` | 17280 grids x 3 TOD = **51840** rows | ~5.3 MB (1-line JSON) |
-| `data/processed/metrics_chg.json` | sparse **3708** rows | ~0.4 MB |
-| `data/processed/entities_charger.json` | **106** XiaoLi chargers GCJ | ~33 KB / ~1.4k lines |
-| `data/processed/manifest.json` | metrics counts + artifacts | ~1 KB |
-| `docs/synthetic-rules.md` | formulas (interview) | - |
-| `contracts/scene-gap.schema.json` | norm=identity; gap=demand-supply | updated description |
+| path | note | size / n |
+|------|------|----------|
+| `data/static/weather_coeff.json` | ride/delivery/chg/o2o | ~1 KB |
+| `data/static/calendar.json` | baseline + national_day | ~1 KB |
+| `data/static/congestion_coeff.json` | citywide + corridor difficulty | ~2.5 KB |
+| `data/processed/metrics_zone.json` | 118 z x 3 TOD x 4 scene = **1416** | ~311 KB |
+| `data/processed/metrics_ride.json` | zone-primary **354** | ~78 KB |
+| `data/processed/metrics_delivery.json` | **354** | ~79 KB |
+| `data/processed/metrics_chg.json` | **354** | ~77 KB |
+| `data/processed/metrics_o2o.json` | **354** | ~77 KB |
+| `data/processed/metrics_heat_fine.json` | fine heat **267204** (ride+delivery) | ~49 MB · **gitignore** · rebuild on build:synthetic |
+| `data/processed/entities_charger.json` | **1100** 小李充电 | ~350 KB |
+| `data/processed/entities_store.json` | **2200** 小李门店 | ~690 KB |
+| `docs/synthetic-rules.md` | formulas | - |
 
-## Runtime contract (for WS-D)
+Legacy 1km `grids.json` metrics spine: **removed** (product metrics are zone / fine heat).
+
+## Runtime (WS-D)
 
 ```text
-demand = demand_base * weather_coeff[w].demand_ride|demand_chg * node_coeff
-supply = supply_base * weather_coeff[w].supply_ride|supply_chg * node_coeff
-gap    = demand - supply   # bases are 0-100 indices; norm = identity
+demand = demand_base * weather.demand_{scene} * node_coeff
+supply = supply_base * weather.supply_{scene} * node_coeff / difficulty_{scene}
+gap    = demand - supply
 ```
 
-- weather: `data/static/weather_coeff.json`
-  - clear: ride d=1.0 s=1.0
-  - rain: ride d=1.18 (>=1.1) s=0.82 (<=0.85)
-  - extreme: d=0.72 s=0.55
-- node: `data/static/calendar.json` -> `baseline` | `national_day`
-- details: `docs/synthetic-rules.md`
+- difficulty: `congestion_coeff.scopes.citywide[weather][tod]` + corridor extras
+- heat mode: load `metrics_heat_fine` or rasterize zone metrics client-side
+- entities: charger 800–1500, store 1500–3000 (PRD bands)
 
-## Gate C sample
+## Gate sample
 
-- Lujiazui office grid `sh:1000:69:61` / `wd_pm_peak`:
-  - clear gap ~60.8 -> rain gap ~85.9 (worse OK)
-- charger display names: 小李充电-* ; no employer sites
-- `grid_id` matches B; algorithm unchanged
+- zone `sh:z:office:office_lujiazui` wd_pm_peak ride:
+  - clear gap ~74 → rain gap ~100 (worse OK; difficulty↑)
+- brands: 小李* only
 
-## Landuse narrative
+## Downstream
 
-- office -> high demand at wd_pm_peak
-- residential -> high demand am; supply return at pm
-- hub / lingang labels -> larger demand/supply spread
+- D: default heat = **zone faces**; fine/KDE switch; load congestion_coeff for narrative bar
+- E: stores + chargers for o2o/energy tabs
+- **Please continue WS-D UI against zone metrics**
 
-## Downstream WS-D
+## Out of scope
 
-- load metrics_ride + coeffs; scene badge formula = above
-- dual layer demand x supply; scenario A=clear B=rain
-- **Please start WS-D (main path, most important)**
-
-## Out of scope (honored)
-
-- no Leaflet/UI
-- did not change grid_id rule
+- no road geometry redo (B2)
+- no full UI rewrite (D)

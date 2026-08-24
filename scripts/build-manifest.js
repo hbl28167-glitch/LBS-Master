@@ -27,8 +27,13 @@ function main() {
   const roadsPath = root("data", "processed", "roads_gcj.geojson");
   const roadsMetaPath = root("data", "processed", "roads_meta.json");
   const ridePath = root("data", "processed", "metrics_ride.json");
+  const delPath = root("data", "processed", "metrics_delivery.json");
   const chgPath = root("data", "processed", "metrics_chg.json");
+  const o2oPath = root("data", "processed", "metrics_o2o.json");
+  const zoneMPath = root("data", "processed", "metrics_zone.json");
+  const heatPath = root("data", "processed", "metrics_heat_fine.json");
   const chgEntPath = root("data", "processed", "entities_charger.json");
+  const storeEntPath = root("data", "processed", "entities_store.json");
 
   let grid_count = 0;
   let cell_m = null;
@@ -85,17 +90,23 @@ function main() {
   }
 
   const metrics_ride_count = rowCount(ridePath);
+  const metrics_delivery_count = rowCount(delPath);
   const metrics_chg_count = rowCount(chgPath);
+  const metrics_o2o_count = rowCount(o2oPath);
+  const metrics_zone_count = rowCount(zoneMPath);
+  const metrics_heat_fine_count = rowCount(heatPath);
   const entities_charger_count = rowCount(chgEntPath);
+  const entities_store_count = rowCount(storeEntPath);
 
   const manifest = {
-    version: "0.2.0",
+    version: "0.3.0",
     bbox_gcj,
     built_at: new Date().toISOString(),
     osm_attribution: "© OpenStreetMap contributors",
     synthetic: true,
     synthetic_note:
-      "All ride/chg metrics and 小李 charger entities are Synthetic; not real ops data.",
+      "All zone/fine metrics and 小李 charger/store entities are Synthetic; not real ops data.",
+    metrics_unit_primary: "zone",
     zone_id_rule,
     zone_count,
     water_features,
@@ -108,9 +119,14 @@ function main() {
     ui_default_layers: ["basemap", "water", "roads", "zones"],
     road_features,
     roads_source,
+    metrics_zone_count,
     metrics_ride_count,
+    metrics_delivery_count,
     metrics_chg_count,
+    metrics_o2o_count,
+    metrics_heat_fine_count,
     entities_charger_count,
+    entities_store_count,
     artifacts: {
       zones: "data/processed/zones_shanghai.geojson",
       zones_index: "data/processed/zones_shanghai.json",
@@ -121,9 +137,15 @@ function main() {
       anchors: "data/static/anchors_shanghai.json",
       weather_coeff: "data/static/weather_coeff.json",
       calendar: "data/static/calendar.json",
+      congestion_coeff: "data/static/congestion_coeff.json",
+      metrics_zone: "data/processed/metrics_zone.json",
       metrics_ride: "data/processed/metrics_ride.json",
+      metrics_delivery: "data/processed/metrics_delivery.json",
       metrics_chg: "data/processed/metrics_chg.json",
+      metrics_o2o: "data/processed/metrics_o2o.json",
+      metrics_heat_fine: "data/processed/metrics_heat_fine.json",
       entities_charger: "data/processed/entities_charger.json",
+      entities_store: "data/processed/entities_store.json",
       attribution: "docs/data-attribution.md",
       alignment_sample: "docs/alignment-sample.md",
       synthetic_rules: "docs/synthetic-rules.md"
