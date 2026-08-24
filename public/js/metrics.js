@@ -336,9 +336,306 @@
     return true;
   }
 
+  const FORMULA_CHG =
+    "gap = demand - supply (scene=chg)\n" +
+    "demand/supply × weather_chg × node_chg\n" +
+    "小李充电 · Synthetic · 非 ML";
+
+  const FORMULA_DELIVERY =
+    "gap = demand - supply (scene=delivery)\n" +
+    "supply ÷ difficulty_delivery（拥堵抬难度、缩时效圈）\n" +
+    "门店+需求热力+路网 · Synthetic";
+
+  const FORMULA_O2O =
+    "到店 demand（商圈面）· 单店聚焦覆盖/围栏\n" +
+    "不千店同亮 · LOD + storeFocus · Synthetic";
+
+  const SITING_WEIGHTS = {
+    demand: 0.35,
+    supply_gap: 0.25,
+    competition: 0.2,
+    access: 0.1,
+    anti_cannibal: 0.1
+  };
+  const SITING_R_M = 1500;
+
+  function round1(n) {
+    return Math.round(n * 10) / 10;
+  }
+
+  function haversineM(lat1, lng1, lat2, lng2) {
+    const toR = Math.PI / 180;
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * toR;
+    const dLng = (lng2 - lng1) * toR;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * toR) *
+        Math.cos(lat2 * toR) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+  }
+
+  function clamp01(x) {
+    return Math.max(0, Math.min(100, x));
+  }
+
+  /** ETA ring radius m — shrinks when difficulty rises (fulfillment). */
+  function etaRadiusM(baseM, difficulty) {
+    const base = baseM != null ? baseM : 1800;
+    const d = difficulty != null && difficulty > 0 ? difficulty : 1;
+    return Math.max(400, Math.round(base / d));
+  }
+
+  /** O2O coverage radius by store type (m). */
+  function storeCoverageM(store) {
+    const t = (store && store.store_type) || "";
+    if (/flagship|mall/.test(t)) return 1500;
+    if (/community|neighborhood/.test(t)) return 800;
+    return 1100;
+  }
+
+  /**
+   * S5 score on zone centroids (explainable weights).
+   * zoneList: computed zone metrics; chargers for cannibal.
+   */
+  function scoreSitingCandidates(zoneRow, zoneById, zoneList, chargers) {
+    const zid = zoneRow.zone_id || zoneRow.grid_id;
+    const z = zoneById.get(zid);
+    if (!z || z.centroid_lat == null) return null;
+    const byId = new Map();
+    (zoneList || []).forEach(function (m) {
+      if (m && m.zone_id) byId.set(m.zone_id, m);
+    });
+    const ch = chargers || [];
+
+    function nearZones(lat, lng, rM) {
+      const out = [];
+      zoneById.forEach(function (zz, id) {
+        if (zz.centroid_lat == null) return;
+        const d = haversineM(lat, lng, zz.centroid_lat, zz.centroid_lng);
+        if (d <= rM) out.push({ id: id, z: zz, d: d, m: byId.get(id) });
+      });
+      return out;
+    }
+
+    function scoreAt(cand) {
+      const neigh = nearZones(cand.lat, cand.lng, SITING_R_M);
+      let dSum = 0;
+      let gSum = 0;
+      let n = 0;
+      neigh.forEach(function (x) {
+        if (!x.m || !x.m.ok) return;
+        dSum += x.m.demand || 0;
+        gSum += Math.max(0, x.m.gap || 0);
+        n += 1;
+      });
+      const demandScore = clamp01(n ? dSum / n : cand.seedDemand || 40);
+      const gapScore = clamp01(n ? gSum / n : cand.seedGap || 20);
+
+      let selfCnt = 0;
+      let nearestSelf = Infinity;
+      ch.forEach(function (e) {
+        if (e.lat == null) return;
+        const d = haversineM(cand.lat, cand.lng, e.lat, e.lng);
+        if (d > SITING_R_M) return;
+        if (String(e.brand || "").indexOf("小李") >= 0) {
+          selfCnt += 1;
+          if (d < nearestSelf) nearestSelf = d;
+        }
+      });
+      if (!isFinite(nearestSelf)) nearestSelf = SITING_R_M + 400;
+
+      let competition = selfCnt === 0 ? 42 : selfCnt <= 2 ? 72 : selfCnt <= 5 ? 55 : 32;
+      let access = 48;
+      if ((z.zone_type || "") === "retail" || (z.zone_type || "") === "office")
+        access += 18;
+      if ((z.labels || []).indexOf("hub") >= 0) access += 20;
+      access = clamp01(access);
+
+      let cannibal = 8;
+      if (selfCnt === 0) cannibal = 6;
+      else if (nearestSelf < 400) cannibal = 82;
+      else if (nearestSelf < 900) cannibal = 48;
+      else cannibal = 18;
+      cannibal = clamp01(cannibal + selfCnt * 4);
+
+      const w = SITING_WEIGHTS;
+      const total =
+        w.demand * demandScore +
+        w.supply_gap * gapScore +
+        w.competition * competition +
+        w.access * access +
+        w.anti_cannibal * (100 - cannibal);
+
+      const subs = {
+        demand: round1(demandScore),
+        supply_gap: round1(gapScore),
+        competition: round1(competition),
+        access: round1(access),
+        anti_cannibal: round1(100 - cannibal)
+      };
+
+      const parts = [];
+      if (subs.supply_gap >= 50) parts.push("环内补能缺口仍高");
+      else parts.push("环内缺口中等");
+      if (selfCnt === 0) parts.push("近距无小李站、蚕食低");
+      else if (nearestSelf > 900) parts.push("距已有站较远、蚕食可控");
+      else parts.push("距已有站偏近、蚕食偏高");
+      if (subs.access >= 65) parts.push("商服/枢纽可达较好");
+
+      return {
+        cand_id: cand.cand_id,
+        label: cand.label,
+        lng: cand.lng,
+        lat: cand.lat,
+        zone_id: zid,
+        R_m: SITING_R_M,
+        total: round1(total),
+        subscores: subs,
+        buffer: {
+          neigh_n: n,
+          self_cnt: selfCnt,
+          nearest_self_m: Math.round(nearestSelf)
+        },
+        reason_text:
+          cand.label +
+          "：" +
+          parts.join("；") +
+          "。权重可解释（非 ML），雨天不作定址主依据。"
+      };
+    }
+
+    const dLat = 0.008;
+    const dLng = 0.01;
+    const cands = [
+      {
+        cand_id: "A",
+        label: "候选 A · 缺口区心",
+        lat: z.centroid_lat,
+        lng: z.centroid_lng,
+        seedDemand: zoneRow.demand,
+        seedGap: zoneRow.gap
+      },
+      {
+        cand_id: "B",
+        label: "候选 B · 廊道侧偏移",
+        lat: z.centroid_lat + dLat * 0.35,
+        lng: z.centroid_lng + dLng * 0.4,
+        seedDemand: zoneRow.demand * 0.92,
+        seedGap: (zoneRow.gap || 0) * 1.05
+      }
+    ];
+    const results = cands.map(scoreAt);
+    const sorted = results.slice().sort(function (a, b) {
+      return b.total - a.total;
+    });
+    const win = sorted[0];
+    const lose = sorted[1];
+    let one =
+      "推荐 " + win.cand_id + "（" + win.total.toFixed(1) + "）";
+    if (lose) {
+      const dCan =
+        win.subscores.anti_cannibal - lose.subscores.anti_cannibal;
+      one +=
+        " 优于 " +
+        lose.cand_id +
+        "（" +
+        lose.total.toFixed(1) +
+        "）：" +
+        (dCan >= 3 ? "更低蚕食" : "综合分项更均衡") +
+        "。";
+    }
+    return {
+      zone_id: zid,
+      results: results,
+      winner: win.cand_id,
+      one_liner: one,
+      weights: SITING_WEIGHTS
+    };
+  }
+
+  /**
+   * Quality issues mock — 主数据/入口/路网距；不含终端 GPS。
+   */
+  function mockQualityIssues(stores, chargers) {
+    const issues = [];
+    const rules = [
+      {
+        code: "ENTRY_MISSING",
+        severity: "P0",
+        title: "入口点缺失",
+        detail: "主数据无标准入口，导航到路口后难进店/进站"
+      },
+      {
+        code: "ROAD_TOO_FAR",
+        severity: "P1",
+        title: "距路网过远",
+        detail: "实体相对干道代理偏远，到达体验差"
+      },
+      {
+        code: "NAME_ALIAS",
+        severity: "P1",
+        title: "命名别名不一致",
+        detail: "展示名与主数据别名未对齐（合成）"
+      },
+      {
+        code: "FENCE_DRIFT",
+        severity: "P0",
+        title: "围栏中心偏移",
+        detail: "核销围栏相对主数据坐标偏移（主数据问题，非终端 GPS）"
+      }
+    ];
+
+    function pushFrom(list, objectKind, brandPrefix) {
+      (list || []).forEach(function (e, idx) {
+        if (idx % 17 !== 0 && idx % 23 !== 0) return;
+        const rule = rules[idx % rules.length];
+        const tag = e.zone_id
+          ? String(e.zone_id).split(":").slice(-1)[0]
+          : "片区";
+        issues.push({
+          issue_id: "iss_" + e.entity_id + "_" + rule.code,
+          entity_id: e.entity_id,
+          object: objectKind,
+          display_name: brandPrefix + "·" + tag,
+          brand: e.brand || brandPrefix,
+          code: rule.code,
+          severity: rule.severity,
+          title: rule.title,
+          detail: rule.detail,
+          lng: e.lng,
+          lat: e.lat,
+          out_of_scope: "device_gps_drift",
+          legend_group: "数据质量"
+        });
+      });
+    }
+
+    pushFrom(chargers, "charger", "小李充电");
+    pushFrom(stores, "store", "小李门店");
+    issues.sort(function (a, b) {
+      if (a.severity === b.severity) return a.code.localeCompare(b.code);
+      return a.severity === "P0" ? -1 : 1;
+    });
+    return issues;
+  }
+
+  function qualityColor(sev) {
+    if (sev === "P0") return "#a855f7";
+    if (sev === "P1") return "#f59e0b";
+    return "#94a3b8";
+  }
+
   global.LBSMetrics = {
     FORMULA_RIDE: FORMULA_RIDE,
     FORMULA_GENERIC: FORMULA_GENERIC,
+    FORMULA_CHG: FORMULA_CHG,
+    FORMULA_DELIVERY: FORMULA_DELIVERY,
+    FORMULA_O2O: FORMULA_O2O,
+    SITING_WEIGHTS: SITING_WEIGHTS,
+    SITING_R_M: SITING_R_M,
     sceneKey: sceneKey,
     applyRow: applyRow,
     indexZoneRows: indexZoneRows,
@@ -353,6 +650,12 @@
     heatFill: heatFill,
     roadImpactCopy: roadImpactCopy,
     lodFromZoom: lodFromZoom,
-    roadClassVisible: roadClassVisible
+    roadClassVisible: roadClassVisible,
+    etaRadiusM: etaRadiusM,
+    storeCoverageM: storeCoverageM,
+    scoreSitingCandidates: scoreSitingCandidates,
+    mockQualityIssues: mockQualityIssues,
+    qualityColor: qualityColor,
+    haversineM: haversineM
   };
 })(typeof window !== "undefined" ? window : globalThis);

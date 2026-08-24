@@ -12,26 +12,53 @@
     });
     map.setView([31.23, 121.48], 12);
 
-    let basemapOk = !!amapKey;
-    if (amapKey) {
-      L.tileLayer(
-        "https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}",
-        {
-          subdomains: "1234",
-          maxZoom: 18,
-          attribution: "© 高德地图 · © OSM"
+    // Basemap strategy (05.1: 高德仅底图):
+    // 1) Prefer Gaode vector-style raster (GCJ). Official open-platform apps
+    //    should set amapKey in config.local.js; some webrd endpoints still
+    //    paint without key but are rate-limited / intermittently blocked.
+    // 2) On repeated tile errors → swap to Carto dark fallback (WGS; may
+    //    look slightly offset vs GCJ roads — expected without Gaode).
+    let basemapOk = false;
+    let basemapLayer = null;
+    let fallbackLayer = null;
+    let tileErrs = 0;
+    const keyQ = amapKey ? "&key=" + encodeURIComponent(amapKey) : "";
+    const gaodeUrl =
+      "https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}" +
+      keyQ;
+    basemapLayer = L.tileLayer(gaodeUrl, {
+      subdomains: "1234",
+      maxZoom: 18,
+      attribution: amapKey
+        ? "© 高德地图 · © OSM"
+        : "© 高德地图(无本地Key·可能不稳定) · © OSM"
+    });
+    basemapLayer.on("tileload", function () {
+      basemapOk = true;
+      tileErrs = 0;
+    });
+    basemapLayer.on("tileerror", function () {
+      tileErrs += 1;
+      if (tileErrs >= 6 && !fallbackLayer) {
+        try {
+          map.removeLayer(basemapLayer);
+        } catch (e) {}
+        fallbackLayer = L.tileLayer(
+          "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+          {
+            subdomains: "abcd",
+            maxZoom: 18,
+            attribution: "© CARTO · © OSM · fallback basemap"
+          }
+        );
+        fallbackLayer.addTo(map);
+        basemapOk = false;
+        if (typeof opts.onBasemapFallback === "function") {
+          opts.onBasemapFallback(amapKey ? "gaode_tile_error" : "no_or_bad_key");
         }
-      ).addTo(map);
-    } else {
-      L.tileLayer(
-        "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-        {
-          subdomains: "abcd",
-          maxZoom: 18,
-          attribution: "© CARTO · © OSM · fallback basemap"
-        }
-      ).addTo(map);
-    }
+      }
+    });
+    basemapLayer.addTo(map);
 
     const waterLayer = L.layerGroup().addTo(map);
     const zoneBaseLayer = L.layerGroup().addTo(map);
@@ -333,36 +360,77 @@
       });
     }
 
-    function setPoints(list, kind, lod, focusId) {
+    /**
+     * setPoints(list, kind, lod, focusOpts)
+     * focusOpts: string id | { focusId, mode: 'hide'|'dim', dimOthers }
+     */
+    function setPoints(list, kind, lod, focusOpts) {
       pointsLayer.clearLayers();
       if (!list || !list.length) return;
+      let focusId = null;
+      let mode = "hide";
+      if (typeof focusOpts === "string") {
+        focusId = focusOpts;
+        mode = "hide";
+      } else if (focusOpts && typeof focusOpts === "object") {
+        focusId = focusOpts.focusId || null;
+        mode = focusOpts.mode || "hide";
+      }
+
       let pts = list;
-      if (focusId) {
+      if (focusId && mode === "hide") {
         pts = list.filter(function (e) {
           return e.entity_id === focusId || e.name === focusId;
         });
-      } else if (lod === "city") {
-        // sample
-        const step = Math.max(1, Math.ceil(list.length / 80));
-        pts = [];
-        for (let i = 0; i < list.length; i += step) pts.push(list[i]);
-      } else if (lod === "district") {
-        const step = Math.max(1, Math.ceil(list.length / 350));
-        pts = [];
-        for (let i = 0; i < list.length; i += step) pts.push(list[i]);
+      } else if (!focusId) {
+        if (lod === "city") {
+          const step = Math.max(1, Math.ceil(list.length / 80));
+          pts = [];
+          for (let i = 0; i < list.length; i += step) pts.push(list[i]);
+        } else if (lod === "district") {
+          const step = Math.max(1, Math.ceil(list.length / 400));
+          pts = [];
+          for (let i = 0; i < list.length; i += step) pts.push(list[i]);
+        } else if (lod === "block" && list.length > 900) {
+          const step = Math.max(1, Math.ceil(list.length / 900));
+          pts = [];
+          for (let i = 0; i < list.length; i += step) pts.push(list[i]);
+        }
+      } else if (focusId && mode === "dim") {
+        // keep neighbors lightly for context; cap
+        if (list.length > 500) {
+          const step = Math.max(1, Math.ceil(list.length / 500));
+          pts = [];
+          for (let i = 0; i < list.length; i += step) pts.push(list[i]);
+          const focused = list.find(function (e) {
+            return e.entity_id === focusId;
+          });
+          if (focused && pts.indexOf(focused) < 0) pts.push(focused);
+        }
       }
 
-      const color = kind === "charger" ? "#3dd68c" : "#56b6c2";
+      const color =
+        kind === "charger"
+          ? "#3dd68c"
+          : kind === "quality"
+            ? "#a855f7"
+            : "#56b6c2";
       pts.forEach(function (e) {
         if (e.lng == null || e.lat == null) return;
+        const isFocus = focusId && (e.entity_id === focusId || e.name === focusId);
+        const dim = focusId && mode === "dim" && !isFocus;
         const m = L.circleMarker([e.lat, e.lng], {
-          radius: focusId ? 8 : 4,
-          color: "#fff",
-          weight: 1,
-          fillColor: color,
-          fillOpacity: 0.9
+          radius: isFocus ? 9 : dim ? 3 : kind === "quality" ? 6 : 4,
+          color: isFocus ? "#fbbf24" : "#fff",
+          weight: isFocus ? 2 : 1,
+          fillColor: e._fill || color,
+          fillOpacity: dim ? 0.18 : 0.9,
+          opacity: dim ? 0.35 : 1
         });
-        m.bindTooltip(e.name || e.entity_id, { direction: "top" });
+        m.bindTooltip(
+          e.name || e.display_name || e.entity_id || "",
+          { direction: "top" }
+        );
         m.on("click", function (ev) {
           L.DomEvent.stopPropagation(ev);
           if (onStoreClick) onStoreClick(e);
@@ -371,16 +439,62 @@
       });
     }
 
-    function setEtaRing(latlng, radiusM) {
+    /** Coverage / ETA / fence rings. opts: { rings:[{lat,lng,r,color,dash,label}] } */
+    function setOverlayRings(rings) {
       overlayLayer.clearLayers();
-      if (!latlng) return;
-      L.circle(latlng, {
-        radius: radiusM || 1500,
-        color: "#56b6c2",
-        weight: 1.5,
-        dashArray: "4 3",
-        fillOpacity: 0.06
-      }).addTo(overlayLayer);
+      (rings || []).forEach(function (ring) {
+        if (!ring || ring.lat == null) return;
+        const c = L.circle([ring.lat, ring.lng], {
+          radius: ring.r || 1200,
+          color: ring.color || "#56b6c2",
+          weight: ring.weight != null ? ring.weight : 1.5,
+          dashArray: ring.dash || "4 3",
+          fillColor: ring.fill || ring.color || "#56b6c2",
+          fillOpacity: ring.fillOpacity != null ? ring.fillOpacity : 0.07
+        });
+        if (ring.label) c.bindTooltip(ring.label, { sticky: true });
+        c.addTo(overlayLayer);
+      });
+    }
+
+    function setEtaRing(latlng, radiusM, opts) {
+      const o = opts || {};
+      if (!latlng) {
+        clearOverlay();
+        return;
+      }
+      setOverlayRings([
+        {
+          lat: latlng[0],
+          lng: latlng[1],
+          r: radiusM || 1500,
+          color: o.color || "#56b6c2",
+          dash: o.dash || "4 3",
+          fillOpacity: o.fillOpacity != null ? o.fillOpacity : 0.06,
+          label: o.label || "时效/覆盖圈 · " + Math.round(radiusM || 1500) + "m"
+        }
+      ]);
+    }
+
+    function setSitingMarkers(cands, winnerId) {
+      // draw on overlay as diamond-ish circles
+      (cands || []).forEach(function (c) {
+        if (c.lat == null) return;
+        const win = winnerId && c.cand_id === winnerId;
+        L.circleMarker([c.lat, c.lng], {
+          radius: win ? 11 : 8,
+          color: win ? "#fbbf24" : "#e2e8f0",
+          weight: 2,
+          fillColor: c.cand_id === "A" ? "#3b82f6" : "#06b6d4",
+          fillOpacity: 0.95
+        })
+          .bindTooltip(
+            (c.label || c.cand_id) +
+              (c.total != null ? " · " + c.total : ""),
+            { sticky: true }
+          )
+          .addTo(overlayLayer);
+      });
     }
 
     function clearOverlay() {
@@ -439,6 +553,8 @@
       highlightRoad: highlightRoad,
       setPoints: setPoints,
       setEtaRing: setEtaRing,
+      setOverlayRings: setOverlayRings,
+      setSitingMarkers: setSitingMarkers,
       clearOverlay: clearOverlay,
       showLayer: showLayer,
       fitBbox: fitBbox,

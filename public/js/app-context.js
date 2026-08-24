@@ -21,6 +21,8 @@
     lodLevel: "district",
     storeFocusId: null,
     storeFocusMode: false,
+    siting_open: false,
+    siting_zone_id: null,
     congestion: {
       share_blocked: null,
       difficulty_coeff: 1,
@@ -43,8 +45,8 @@
     overview: ["basemap", "water", "roads", "road_cong", "zones", "heat"],
     ride: ["basemap", "water", "roads", "road_cong", "zones", "heat"],
     fulfillment: ["basemap", "water", "roads", "road_cong", "zones", "heat", "stores"],
-    o2o: ["basemap", "water", "roads", "zones", "heat", "stores"],
-    energy: ["basemap", "water", "roads", "zones", "heat", "chargers"],
+    o2o: ["basemap", "water", "roads", "zones", "heat", "stores", "fence"],
+    energy: ["basemap", "water", "roads", "road_cong", "zones", "heat", "chargers"],
     governance: ["basemap", "water", "roads", "zones", "quality"]
   };
 
@@ -80,6 +82,8 @@
       lodLevel: s.lodLevel,
       storeFocusId: s.storeFocusId,
       storeFocusMode: s.storeFocusMode,
+      siting_open: !!s.siting_open,
+      siting_zone_id: s.siting_zone_id || null,
       congestion: Object.assign({}, s.congestion),
       metric_key: s.metric_key,
       side_panel: s.side_panel
@@ -144,6 +148,8 @@
       layer_set: (PACK_LAYERS[p] || PACK_LAYERS.overview).slice(),
       storeFocusId: null,
       storeFocusMode: false,
+      siting_open: false,
+      siting_zone_id: null,
       metric_key:
         p === "ride"
           ? "ride_gap"
@@ -153,7 +159,9 @@
               ? "chg_gap"
               : p === "o2o"
                 ? "o2o_demand"
-                : "ride_gap"
+                : p === "governance"
+                  ? "quality"
+                  : "ride_gap"
     });
   }
 
@@ -187,6 +195,8 @@
       lodLevel: c.lodLevel,
       storeFocusId: c.storeFocusId,
       storeFocusMode: c.storeFocusMode,
+      siting_open: c.siting_open,
+      siting_zone_id: c.siting_zone_id,
       congestion: c.congestion,
       metric_key: c.metric_key
     };
