@@ -10,6 +10,11 @@ const outDir = path.join(ROOT, "public", "data");
 const copies = [
   ["data/processed/manifest.json", "manifest.json"],
   ["data/processed/grids.json", "grids.json"],
+  ["data/processed/grids_fine.json", "grids_fine.json"],
+  ["data/processed/grids_legacy_meta.json", "grids_legacy_meta.json"],
+  ["data/processed/zones_shanghai.json", "zones_shanghai.json"],
+  ["data/processed/zones_shanghai.geojson", "zones_shanghai.geojson"],
+  ["data/processed/water_shanghai.geojson", "water_shanghai.geojson"],
   ["data/processed/metrics_ride.json", "metrics_ride.json"],
   ["data/processed/metrics_chg.json", "metrics_chg.json"],
   ["data/processed/roads_gcj.geojson", "roads_gcj.geojson"],

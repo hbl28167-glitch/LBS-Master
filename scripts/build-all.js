@@ -22,8 +22,11 @@ function run(rel) {
 }
 
 run("scripts/build-anchors.js");
+run("scripts/build-zones.js");
+run("scripts/build-water.js");
 run("scripts/build-grids.js");
 run("scripts/build-landuse.js");
+run("scripts/build-fine-grids.js");
 // Prefer existing raw; if missing, try tiled download once.
 {
   const fs = require("fs");

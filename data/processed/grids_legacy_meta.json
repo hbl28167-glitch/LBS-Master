@@ -1,0 +1,6 @@
+{
+  "legacy_grid_id_rule": "sh:{cell_m}:{row}:{col}",
+  "ui_default_layer": false,
+  "product_layer": false,
+  "kept_for": "WS-C metrics join backward compat until C migrates to zones"
+}
