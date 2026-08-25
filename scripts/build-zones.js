@@ -1,6 +1,7 @@
 /**
  * Build functional zones GeoJSON (GCJ-02).
  * zone_id FROZEN: sh:z:{type}:{slug}
+ * Geometry v2: road-aligned convex hull from roads_gcj (not smooth ellipse).
  */
 const fs = require("fs");
 const path = require("path");
@@ -8,35 +9,15 @@ const { root } = require("./lib/paths");
 const { wgs84ToGcj02 } = require("./lib/gcj");
 const { catalog } = require("./lib/zone-catalog");
 const { ZONE_COLOR_TOKENS } = require("./lib/color-tokens");
+const {
+  buildRoadPointIndex,
+  zonePolygonFromRoads,
+  round6
+} = require("./lib/zone-geom");
 
 const OUT_GJ = root("data", "processed", "zones_shanghai.geojson");
 const OUT_JSON = root("data", "processed", "zones_shanghai.json");
-
-function round6(n) {
-  return Math.round(n * 1e6) / 1e6;
-}
-
-/** ellipse ring in degrees around GCJ center */
-function ellipseRing(lng, lat, rx_m, ry_m, rotDeg, n = 32) {
-  const midLat = lat;
-  const mPerDegLat = 111320;
-  const mPerDegLng = 111320 * Math.cos((midLat * Math.PI) / 180);
-  const rx = rx_m / mPerDegLng;
-  const ry = ry_m / mPerDegLat;
-  const rot = (rotDeg * Math.PI) / 180;
-  const cos = Math.cos(rot);
-  const sin = Math.sin(rot);
-  const ring = [];
-  for (let i = 0; i <= n; i++) {
-    const t = (i / n) * Math.PI * 2;
-    const x = rx * Math.cos(t);
-    const y = ry * Math.sin(t);
-    const xr = x * cos - y * sin;
-    const yr = x * sin + y * cos;
-    ring.push([round6(lng + xr), round6(lat + yr)]);
-  }
-  return ring;
-}
+const ROADS = root("data", "processed", "roads_gcj.geojson");
 
 function styleFor(type, grade) {
   const tok = ZONE_COLOR_TOKENS[type] || ZONE_COLOR_TOKENS.rural;
@@ -82,11 +63,31 @@ function styleFor(type, grade) {
 }
 
 function main() {
+  let roadIndex = null;
+  let roadsNote = "missing roads_gcj — irregular fallback only";
+  if (fs.existsSync(ROADS)) {
+    console.log("loading roads for zone hulls…");
+    const roadsFc = JSON.parse(fs.readFileSync(ROADS, "utf8"));
+    roadIndex = buildRoadPointIndex(roadsFc, {
+      cellDeg: 0.012,
+      sampleStepM: 90,
+      skipLink: true
+    });
+    roadsNote =
+      "road samples=" +
+      roadIndex.count +
+      " from data/processed/roads_gcj.geojson";
+    console.log("  " + roadsNote);
+  } else {
+    console.warn("WARN: " + ROADS + " not found; zones use irregular fallback");
+  }
+
   const items = catalog();
   const features = [];
   const zones = [];
   const byType = {};
   const byBatch = {};
+  const byMethod = {};
 
   for (const z of items) {
     const g = wgs84ToGcj02(z.lng_wgs, z.lat_wgs);
@@ -94,7 +95,17 @@ function main() {
     const lat = round6(g.lat);
     const zone_id = `sh:z:${z.zone_type}:${z.slug}`;
     const style = styleFor(z.zone_type, z.grade);
-    const ring = ellipseRing(lng, lat, z.rx_m, z.ry_m, z.rot_deg);
+    const geom = zonePolygonFromRoads(
+      lng,
+      lat,
+      z.rx_m,
+      z.ry_m,
+      z.rot_deg,
+      zone_id,
+      roadIndex
+    );
+    byMethod[geom.method] = (byMethod[geom.method] || 0) + 1;
+
     const props = {
       zone_id,
       name: z.name,
@@ -103,14 +114,16 @@ function main() {
       centroid_lng: lng,
       centroid_lat: lat,
       batch: z.batch,
-      source: "public_name+schematic_aoi",
+      source: "public_name+road_aligned_aoi",
+      geometry_method: geom.method,
+      road_pts_used: geom.road_pts,
       labels: z.labels,
       ...style
     };
     features.push({
       type: "Feature",
       properties: props,
-      geometry: { type: "Polygon", coordinates: [ring] }
+      geometry: { type: "Polygon", coordinates: [geom.ring] }
     });
     zones.push({
       zone_id,
@@ -121,6 +134,7 @@ function main() {
       centroid_lat: lat,
       batch: z.batch,
       source: props.source,
+      geometry_method: geom.method,
       labels: z.labels,
       color_token: style.color_token,
       fill: style.fill,
@@ -137,24 +151,31 @@ function main() {
     type: "FeatureCollection",
     crs_note: "GCJ-02",
     zone_id_rule: "sh:z:{type}:{slug}",
+    geometry_version: "v2_road_aligned",
     attribution:
-      "Place names: public knowledge. Boundaries: schematic AOI for sandbox (not official planning red-lines). © LBS-Master synthetic geometry.",
+      "Place names: public knowledge. Boundaries: road-aligned schematic AOI from OSM road skeleton (not official planning red-lines). Road geometry © OpenStreetMap contributors. © LBS-Master.",
+    roads_note: roadsNote,
     count: features.length,
     by_type: byType,
     by_batch: byBatch,
+    by_geometry_method: byMethod,
     features
   };
 
   const index = {
-    version: "0.2.0",
+    version: "0.3.0",
     zone_id_rule: "sh:z:{type}:{slug}",
     crs: "GCJ-02",
+    geometry_version: "v2_road_aligned",
     count: zones.length,
     by_type: byType,
     by_batch: byBatch,
+    by_geometry_method: byMethod,
     color_tokens: ZONE_COLOR_TOKENS,
     ui_default_layer: true,
     product_layer: true,
+    note:
+      "Polygons from nearby roads_gcj convex hull (inflate). zone_id frozen. Ellipse default removed.",
     zones,
     geojson: "data/processed/zones_shanghai.geojson"
   };
@@ -163,7 +184,7 @@ function main() {
   fs.writeFileSync(OUT_GJ, JSON.stringify(fc));
   fs.writeFileSync(OUT_JSON, JSON.stringify(index, null, 2));
   console.log(
-    `zones: ${zones.length} type=${JSON.stringify(byType)} batch=${JSON.stringify(byBatch)} → ${OUT_GJ}`
+    `zones: ${zones.length} method=${JSON.stringify(byMethod)} type=${JSON.stringify(byType)} → ${OUT_GJ}`
   );
 }
 
