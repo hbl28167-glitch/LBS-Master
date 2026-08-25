@@ -1,7 +1,7 @@
-# HANDOFF WS-C (PRD 05.2 site + scene-aligned)
+﻿# HANDOFF WS-C (PRD 05.2 site + scene-aligned)
 
 - branch: `master`
-- feat commit: (pin after commit)
+- feat commit: `50d975e` - `feat(data): site-level power and scene-aligned metrics 05.2`
 - depends: zones (`zone_id` frozen) + `time_scenario` / `scenario_ci` / `congestion_coeff` (B static)
 - business data: **all Synthetic**
 - status: **UNBLOCKED**
