@@ -2,27 +2,42 @@
 
 Global UI / session state. Field names are frozen across workstreams.
 
-**Acceptance truth for map UX:** PRD **05.1** (地图体验与空间体系).  
-Legacy 05/06 fields below remain valid; **05.1 additions** are required for the business-map console.
+| Acceptance | Doc |
+|------------|-----|
+| Map shell / zones / LOD / heat modes | PRD **05.1** |
+| **analysis_scene, layers, congestion bins, accessibility, energy site** | PRD **05.2** (wins on conflict for those topics) |
 
 ## Canonical shape
 
 ```js
 {
-  // --- legacy (05 / 06) ---
   persona: "analyst",
   region: { city: "shanghai", district: null },
-  time_of_day: "wd_pm_peak",
-  season_or_node: "baseline",
+
+  // --- 05.2 analysis (source of truth for road CI / isochrone / difficulty) ---
+  analysis_scene: {
+    time_scenario: "wd_pm_peak",
+    weather: "clear"
+  },
+
+  // --- legacy mirrors (compat; keep in sync with analysis_scene when writing) ---
+  time_of_day: "wd_pm_peak",       // alias of time_scenario when using 6-bin ids
   weather: "clear",
-  scenario: "A",
-  active_scene: "ride",
+  scenario: "A",                   // DEPRECATED as analysis driver (optional UI shortcut only)
+  season_or_node: "baseline",      // node label for metrics; NOT a third analysis card
+
+  active_scene: "ride",            // gap formula key: ride|chg|delivery|…
   active_pack: "overview",
+
   selected_grid_id: null,
   selected_entity: null,
   selected_zone_id: null,
   selected_road_id: null,
+  selected_site_id: null,
+
+  // all tokens optional; absence = layer off. basemap MAY be off (05.2).
   layer_set: ["basemap", "water", "roads", "zones", "heat"],
+
   snapshot_id: null,
 
   // --- 05.1 map console ---
@@ -31,84 +46,109 @@ Legacy 05/06 fields below remain valid; **05.1 additions** are required for the 
   lodLevel: "city",
   storeFocusId: null,
   storeFocusMode: false,
+  siteFocusMode: false,
 
-  // read-only derived display (UI may recompute; snapshot may persist last values)
+  // camera: flyTo only — NOT part of analysis_scene
+  mapCamera: {
+    preset_id: null,             // e.g. "lujiazui" | null
+    // center/zoom applied by map; changing preset must not rewrite analysis_scene
+  },
+
   congestion: {
     share_blocked: null,
     difficulty_coeff: 1,
-    narrative: null
+    city_ci: null,
+    narrative: null,
+    synthetic: true
   }
 }
 ```
 
 ## Field reference
 
-### Core (unchanged semantics)
+### analysis_scene (05.2 Must)
+
+See `analysis-scene.md`.
+
+| Field | Values |
+|-------|--------|
+| `analysis_scene.time_scenario` | `wd_night` \| `wd_am_peak` \| `wd_day_offpeak` \| `wd_pm_peak` \| `we_day` \| `we_night` |
+| `analysis_scene.weather` | `clear` \| `rain` \| `extreme` |
+
+Chip copy example: `工作日·晚高峰 · 晴 · CI≈1.95` (Synthetic).
+
+### Deprecated / demoted
+
+| Field / concept | 05.2 rule |
+|-----------------|-----------|
+| Top-bar **镜头** as parallel “scenario” | **Removed from analysis IA.** Presets = `mapCamera` **flyTo only**. |
+| `scenario` A/B as second weather axis | Prefer weather card; A/B may map to clear/rain shortcut only |
+| Independent `wd_noon` | Merged into `wd_day_offpeak` |
+| Ellipse zones as success | Geometry fail if still bubble-city (zone pipeline, not this file) |
+
+### Selection
 
 | Field | Notes |
 |-------|--------|
-| `persona` | Default `"analyst"` (P0). Narrative only; no ACL. |
-| `region.city` | MVP fixed `"shanghai"` (incl. Lingang). |
-| `time_of_day` | e.g. `wd_pm_peak` — also drives synthetic congestion. |
-| `season_or_node` | e.g. `baseline`, `national_day` |
-| `weather` | e.g. `clear`, `rain` |
-| `scenario` | Sandbox A/B id: `"A"` \| `"B"` (not live traffic experiment). |
-| `active_scene` | Gap definition key: `ride` \| `chg` \| `delivery` \| `o2o_store` \| … |
-| `active_pack` | Top-nav pack: `overview` \| `o2o` \| `ride` \| `fulfillment` \| `energy` \| `governance` |
-| `selected_grid_id` | Optional fine-cell id; **not** product hero layer (05.1 deletes 1km grid as main visual). Do **not** change `grid_id` algorithm without migrating C/D. |
-| `selected_entity` | Generic entity ref or `null` (charger/store/…). Prefer typed focus fields when set. |
-| `selected_zone_id` | Matches `zone.zone_id` or `null` |
-| `selected_road_id` | Matches road feature id (OSM way / processed id) or `null` |
-| `layer_set` | Visible layer tokens (see below) |
-| `snapshot_id` | Export id or `null` |
+| `selected_zone_id` | `zone.zone_id` — **id algorithm frozen** |
+| `selected_road_id` | Road feature id |
+| `selected_site_id` | Energy **site** id (`site.schema.json`); not stall id |
+| `selected_grid_id` | Fine cell only; not hero layer; **grid_id algorithm frozen** |
+| `storeFocusId` / `storeFocusMode` | 到店单店 |
+| `siteFocusMode` | 能源单站 + service rings; requires `selected_site_id` |
 
-### 05.1 — road / heat / LOD
+### layer_set (05.2 · all toggleable)
 
-| Field | Type | Values | Notes |
-|-------|------|--------|--------|
-| `roadDisplayMode` | string | `cong` \| `grade` \| `biz` | ① congestion (default) ② grade/speed class ③ business-difficulty tint. Whole-way one color, no direction split. |
-| `heatRenderMode` | string | `poly` \| `grid` \| `kde` | 区面 / 细格(200–300m) / 核密度; **same metric**, default **`poly`**. |
-| `lodLevel` | string | `city` \| `district` \| `block` | Coarse LOD band; UI may also derive from map zoom (see `lod.md`). |
+Tokens present in the array = **on**. Missing = **off**.
 
-### 05.1 — store focus (到店)
+| Token | Default overview | Notes |
+|-------|------------------|--------|
+| `basemap` | on | **Amap only**; user **may turn off** → dark empty basemap + vectors |
+| `water` | on | 黄浦江等 |
+| `roads` | on | geometry |
+| `road_cong` | on when mode cong | congestion color (or fold into roads paint) |
+| `zones` | on | functional polygons |
+| `heat` | on | respects `heatRenderMode` |
+| `overlay` | off | generic analysis overlay (rings, etc.) |
+| `isochrone` | off | 5/10/15 rings when site focused |
+| `stores` | pack-dependent | |
+| `sites` / `chargers` | energy pack | **`sites` preferred** (site granularity) |
+| `fence` | off | |
+| `quality` | governance | |
 
-| Field | Type | Notes |
-|-------|------|--------|
-| `storeFocusId` | string \| null | Focused 小李 store entity id when in o2o single-store mode. |
-| `storeFocusMode` | boolean | `true` → render primarily that store + coverage/fence/flow; fade/hide other stores. Exit → restore LOD rules. |
+**Forbidden default-on:** `grids_1km` hero fill.
 
-When `storeFocusMode` is true, `storeFocusId` must be non-null. Setting `storeFocusId` should set `storeFocusMode=true`; clearing id sets mode false.
+UI layout (05.2): zoom control must stay clickable (NW/SW safe zone — implementation); layer dock must not block zoom permanently.
 
-### 05.1 — congestion (read-only display)
+### road / heat / LOD (05.1)
 
-| Field | Type | Notes |
-|-------|------|--------|
-| `congestion.share_blocked` | number \| null | Share of visible roads in congested classes (0–1) for narrative bar. |
-| `congestion.difficulty_coeff` | number | Multiplier into ride match difficulty / fulfillment ETA risk (default `1`). Driven by `time_of_day` × `weather`/`scenario` × road class rules (WS-C). |
-| `congestion.narrative` | string \| null | One-line story for the narrative strip (not a KPI dump). |
+| Field | Values | Notes |
+|-------|--------|--------|
+| `roadDisplayMode` | `cong` \| `grade` \| `biz` | See `road-display.md` (4-class cong) |
+| `heatRenderMode` | `poly` \| `grid` \| `kde` | default `poly` |
+| `lodLevel` | `city` \| `district` \| `block` | See `lod.md` |
 
-These three are **display/derived**: producers may omit on cold start; UI must not crash if null.
+### congestion (read-only display)
 
-## Default layer_set (overview, 05.1)
-
-```text
-basemap, water, roads, road_cong, zones, heat
-```
-
-Optional / mode: `heat_grid`, `heat_kde`, `stores`, `chargers`, `fence`, `eta_ring`, `quality`.
-
-**Forbidden default:** coarse 1km product grid as hero fill (`grids_1km` must not be default-on).
+| Field | Notes |
+|-------|--------|
+| `share_blocked` | Visible ways in `cong`\|`severe` (0–1) |
+| `difficulty_coeff` | From **same** CI table as `analysis_scene` |
+| `city_ci` | Optional chip value |
+| `narrative` | One hard metric + object, not KPI dump |
+| `synthetic` | Always treat as true in delivery |
 
 ## Switch rules
 
 | Event | Inherit | Rewrite |
 |-------|---------|---------|
-| Business pack switch | region, time dims, weather, scenario, selected_zone/road/grid | `active_pack`, `active_scene`, default `layer_set`; prompt user |
-| Scenario A→B (rain) | selection | weather/scenario; refresh heat + road cong + `congestion.*` |
-| Enter store focus | pack=o2o | `storeFocusId`, `storeFocusMode=true` |
-| Exit store focus | — | clear focus fields; restore LOD point density |
-| LOD / zoom change | metrics | visibility of residential roads, store/charger density (see `lod.md`) |
+| Pack switch | `analysis_scene`, region, selections | `active_pack`, `active_scene`, default `layer_set` |
+| Time or weather card | selections | `analysis_scene` (+ mirrors); road colors; rings if site focused; trend highlight |
+| Camera preset | **everything analysis** | map center/zoom only |
+| Enter site focus | analysis_scene | `selected_site_id`, `siteFocusMode`, `isochrone` on |
+| Enter store focus | analysis_scene | `storeFocusId`, `storeFocusMode` |
+| Layer toggle | — | `layer_set` add/remove token only |
 
-## Snapshot export
+## Snapshot export (05.2 energy path)
 
-Export payload should include at least: full AppContext (incl. 05.1 modes + congestion snapshot), selected ids, and active metric key.
+Include at least: `analysis_scene`, `selected_site_id`, power summary, isochrone bands meta, `coverage` zone ids, optional Δ vs alternate scene, full AppContext modes.

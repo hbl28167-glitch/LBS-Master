@@ -2,62 +2,88 @@
 
 - 仓绝对路径：`C:\Users\hongbol\Documents\LBS-Master`
 - 当前 branch / commit：`master`（以 `git rev-parse HEAD` 为准）
-- 范围：仓库骨架 / 可移植 / **contracts（含 05.1 对齐）**
-- 如何跑 test：
-  1. `cd` 到仓根（任意盘符/用户目录均可）
-  2. Node 18+
-  3. `npm test` 或 `npm run verify:paths`
+- 范围：骨架 / 可移植 / **contracts（05.1 + 05.2）**
+- 如何跑 test：Node 18+ → 仓根 `npm test` 或 `npm run verify:paths`
 
-## contracts 路径（下游必读）
+## contracts 路径
 
 | 路径 | 用途 |
 |------|------|
-| `contracts/README.md` | 索引 + 05.1 delta |
-| `contracts/app-context.md` | AppContext 全字段（含 05.1） |
-| `contracts/zone.schema.json` | 区面 zone |
-| `contracts/zone-color-tokens.md` | 商业紫/工业浅蓝/住宅米白等 token |
-| `contracts/lod.md` | city \| district \| block |
-| `contracts/store-focus.md` | 到店单店聚焦 |
-| `contracts/road-display.md` | roadDisplayMode + congestion 展示 |
-| `contracts/grid.schema.json` | 细格/遗留格（**非**默认主视觉） |
-| `contracts/scene-gap.schema.json` | 供需 base 行 |
-| `contracts/payload.schema.json` | manifest 头 |
+| `contracts/README.md` | 索引 + delta |
+| `contracts/app-context.md` | AppContext 全字段 |
+| `contracts/analysis-scene.md` | 6 时间档 × 天气；镜头 demote |
+| `contracts/accessibility.md` | E fromPoint 请求/响应说明 |
+| `contracts/accessibility.schema.json` | `$defs.FromPointRequest` / `AccessibilityResult` |
+| `contracts/site.md` + `site.schema.json` | 能源 **site** + 功率字段 |
+| `contracts/road-display.md` | 四档 cong_class + Synthetic |
+| `contracts/zone.schema.json` / `zone-color-tokens.md` | 区面（`zone_id` 冻结） |
+| `contracts/lod.md` / `store-focus.md` | LOD / 到店聚焦 |
+| `contracts/grid.schema.json` | 细格（`grid_id` 冻结；非主视觉） |
+| `contracts/scene-gap.schema.json` / `payload.schema.json` | 供需行 / manifest |
 
-## 05.1 新增 AppContext 字段
+## 05.2 新增 / 修订要点
 
-- `roadDisplayMode`: `cong` \| `grade` \| `biz`（默认 `cong`）
-- `heatRenderMode`: `poly` \| `grid` \| `kde`（默认 `poly`）
-- `lodLevel`: `city` \| `district` \| `block`
-- `storeFocusId` / `storeFocusMode`
-- `selected_zone_id` / `selected_road_id` / `active_pack`
-- `congestion.share_blocked` \| `difficulty_coeff` \| `narrative`（只读展示/可快照）
+### analysis_scene
+
+```js
+analysis_scene = { time_scenario, weather }
+```
+
+- **time_scenario（6）：** `wd_night` | `wd_am_peak` | `wd_day_offpeak` | `wd_pm_peak` | `we_day` | `we_night`  
+  - 平峰合并：无独立 `wd_noon` → 用 `wd_day_offpeak`
+- **weather：** `clear` | `rain` | `extreme`
+- 遗留 `time_of_day` / 顶层 `weather`：兼容镜像，写入时与 `analysis_scene` 对齐
+- **`scenario` A/B：** 降级为可选 UI 快捷，**不再**作为分析主轴
+- **镜头 / mapCamera：** **仅 flyTo**；改镜头不得改路况/等时圈
+
+### layer_set
+
+- **`basemap` 可关**（仅高德；关后深色空底 + 矢量）
+- `water` / `roads` / `zones` / `heat` / `overlay` / `isochrone` / `sites` 等均可关
+- 数组内 = 开，缺省 = 关
+
+### 路况四档
+
+`cong_class`: `free` | `slow` | `cong` | `severe` + 全程 **Synthetic** 声明；与 `analysis_scene` 同源 CI 表
+
+### Accessibility E
+
+- 请求：`source` + `analysis_scene` + `bands_min` 默认 `[5,10,15]`
+- 响应：`bands[]` 几何、`zone_coverage[]`、`stats.roads_qc_ok`；QC 失败不得伪造成功圈
+
+### 能源 site
+
+- 单位：**site**（非桩林主角）
+- Must 字段方向：`site_id`、`stall_count`、`max_power_kw` 和/或 `power_structure`、`synthetic: true`
+- AppContext：`selected_site_id`、`siteFocusMode`
 
 ## 破坏性变更
 
 | 项 | 说明 |
 |----|------|
-| **无 grid_id 算法变更** | 字符串规则未动；禁止下游自行改 id 生成 |
-| 产品语义 | 1km 糊格 **不得**再作默认主视觉（05.1 Won't）；schema 保留供细格热力/迁移 |
-| 默认图层 | 总览默认路网+区面+面热力+水系，而非粗格填色 |
-| 字段扩展 | 旧 UI 若写死仅 05 字段，需读新字段（缺省按 app-context 默认） |
+| **无** `grid_id` / `zone_id` 算法变更 | 禁止擅自改 id 生成 |
+| 分析主轴 | 从「日内+天气+镜头平铺 / A·B」→ **两维 `analysis_scene`** |
+| 时间枚举 | 应用 6 档；旧随意 `time_of_day` 字符串需映射到 6 档 |
+| 图层 | basemap 非强制常开 |
+| 能源实体 | 列表/地图默认 site；旧「桩点冒充站」须在 C 合并 |
 
 ## 下游注意
 
 | WS | 注意 |
 |----|------|
-| **B / B2** | 路网 QC 门禁；区面几何产出应对齐 `zone.schema.json` + color_token；勿再把 1km 格当产品主交付 |
-| **C** | 指标优先挂 **zone_type × grade × time_of_day**；输出拥堵系数供 `congestion.difficulty_coeff`；实体量级见 05.1 |
-| **D** | 读 `roadDisplayMode` / `heatRenderMode` / `lodLevel`；叙事条+路段分析；默认开路网 |
-| **E** | 到店 `storeFocus*`；五大 Tab 可点 |
-| **F** | 讲稿与审计按 05.1，勿再吹「格网看板」 |
+| **B / B2** | 路名保留供早峰锚点；区面 **贴路多边形**（反椭圆）；id 冻结 |
+| **C** | 静态表：`scenario_ci`、典型路段、`ci_series_24h`；系数键 = `time_scenario`×`weather`；**site + 功率**；`congestion_coeff` 与 CI 同源 |
+| **D** | 两卡 IA；layer 总开关含底图；四档图例；趋势绑 scene；镜头 flyTo only；缩放避让（实现） |
+| **E** | 实现 Accessibility E；能源 KPI+站列表+功率详情；点站 5/10/15 + Δ |
+| **F** | 讲稿按 05.2 旅程 A/B，强调决策结论而非图层巡游 |
 
-## 体验验收
+## 验收口径
 
-- **以 PRD 05.1 为准**（压过旧「能点出行即过」）。
-- 示意 UI：`Byteda\P1\demo\`（非正式，不在本仓迭代生产数据）。
+- 地图壳 / 区面配色 LOD： **05.1**
+- 业务评估（情景、路况语义、可达、能源站圈）： **05.2**
+- demo 目录：非正式
 
 ## 已知问题
 
-- 本 WS-A 续工 **只改 contracts/README/HANDOFF**，未改 public 业务 UI、未重跑合成。
-- `npm run build` / 路网数据状态见 HANDOFF-B2 / INTEGRATION。
-- 源码 portable：`scripts/` + `public/` 禁止盘符绝对路径（`verify:paths`）。
+- 本波 **仅 contracts + README + HANDOFF**；未改 public 大 UI、未下 OSM、未重算合成
+- portable：`npm test` / `verify:paths` 必须过

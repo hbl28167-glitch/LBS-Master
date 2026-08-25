@@ -7,45 +7,55 @@ Frozen cross-WS field names. **Do not rename without HANDOFF + downstream rebuil
 | Topic | Doc |
 |-------|-----|
 | Portable / GitHub / synthetic brand | PRD 05 |
-| **Map UX, zones, roads, heat, LOD, store focus** | **PRD 05.1** (wins on conflict) |
+| Map UX, zones colors, LOD, heat modes, store focus | PRD **05.1** |
+| **analysis_scene, congestion bins, layers, accessibility E, energy site, camera≠scene** | PRD **05.2** (wins on those topics) |
 | Original WS plan | 06 / 07 |
 
 ## Files
 
 | File | Role |
 |------|------|
-| `app-context.md` | Global session state (+ 05.1 modes) |
-| `zone.schema.json` | Functional zone 区面 |
+| `app-context.md` | Global session (+ 05.1/05.2) |
+| `analysis-scene.md` | 6× time_scenario + weather; camera demoted |
+| `accessibility.md` + `accessibility.schema.json` | E fromPoint request/result |
+| `site.md` + `site.schema.json` | Energy **site** + power fields |
+| `zone.schema.json` | Functional zone 区面 (`zone_id` frozen) |
 | `zone-color-tokens.md` | Type/grade color tokens |
-| `lod.md` | city / district / block bands |
+| `lod.md` | city / district / block |
 | `store-focus.md` | 到店单店聚焦 |
-| `road-display.md` | roadDisplayMode + congestion display |
-| `grid.schema.json` | Fine/legacy cell (**not** default hero layer) |
+| `road-display.md` | roadDisplayMode + **4-class** cong + Synthetic |
+| `grid.schema.json` | Fine/legacy cell (`grid_id` frozen; not hero) |
 | `scene-gap.schema.json` | demand/supply base rows |
 | `payload.schema.json` | manifest header |
 
-## 05.1 delta (WS-A · 0824)
+## 05.2 delta (WS-A)
 
 **Added**
 
-- AppContext: `roadDisplayMode`, `heatRenderMode`, `lodLevel`, `storeFocusId`, `storeFocusMode`, `selected_zone_id`, `selected_road_id`, `active_pack`, `congestion.*`
-- Zone model + color tokens + LOD + store-focus + road-display docs
+- `analysis_scene = { time_scenario, weather }` with 6 time bins (平峰 merged → `wd_day_offpeak`)
+- Camera / 镜头 = flyTo only (`mapCamera`); not a third scenario axis
+- `layer_set`: **basemap optional off**; water/roads/zones/heat/overlay/sites all toggleable
+- Road `cong_class`: `free` \| `slow` \| `cong` \| `severe` + Synthetic
+- Accessibility E: FromPointRequest / AccessibilityResult
+- Energy `site`: `site_id`, `max_power_kw` / `power_structure`, `stall_count`; not stall-map hero
+- AppContext: `selected_site_id`, `siteFocusMode`, `congestion.city_ci`, `congestion.synthetic`
 
 **Unchanged (breaking if touched)**
 
-- `grid_id` string algorithm / meaning — **do not change** without migrating metrics & UI
-- Core AppContext time dims: `time_of_day`, `weather`, `scenario`, `active_scene`
-- `manifest` required keys in `payload.schema.json`
+- `grid_id` / `zone_id` algorithms  
+- `payload.schema.json` required manifest keys  
 
-**Product deprecation (not a schema delete)**
+**Deprecated semantics**
 
-- 1km citywide grid as **main visual** is Won't (05.1). Schema kept for optional fine-grid heat / migration.
+- Lens presets as analysis “情景”  
+- `scenario` A/B as primary weather driver  
+- Independent noon time bin  
 
 ## Downstream
 
 | WS | Must read |
 |----|-----------|
-| B / B2 | roads QC; zone geometry pipeline may emit `zone.schema.json` |
-| C | metrics on zone_type×grade×tod; congestion coeffs → `congestion.difficulty_coeff` |
-| D | default layers, three heat modes, road modes, LOD, narrative bar |
-| E | store focus; pack tabs enabled |
+| B / B2 | roads + name for anchors; zone **polygon** not ellipse; ids frozen |
+| C | CI tables keyed by `time_scenario`×`weather`; **site**-level entities + power; metrics on zones |
+| D | Two cards (time/weather); layer dock; 4-class legend; trend binds `analysis_scene`; camera flyTo only |
+| E | Accessibility E; energy KPI/list/detail; site focus + rings; power fields |

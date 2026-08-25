@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lbs-master.local/contracts/site.schema.json",
+  "title": "LBS-Master energy charging site (站点)",
+  "description": "PRD 05.2 §3.6. List/map unit is site, not individual stalls. Brand 小李* only. No employer site names. Power is site-level attribute; map must not render per-stall polygons as hero.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "site_id",
+    "name",
+    "lng",
+    "lat",
+    "stall_count",
+    "synthetic"
+  ],
+  "properties": {
+    "site_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable site id, e.g. sh:site:xl-001"
+    },
+    "name": {
+      "type": "string",
+      "description": "Display name under 小李* brand; never employer roster names"
+    },
+    "lng": {
+      "type": "number",
+      "description": "GCJ-02"
+    },
+    "lat": {
+      "type": "number",
+      "description": "GCJ-02"
+    },
+    "zone_id": {
+      "type": ["string", "null"],
+      "description": "Host functional zone if known; zone_id algorithm frozen"
+    },
+    "stall_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Aggregated connector/stall count at site"
+    },
+    "max_power_kw": {
+      "type": ["number", "null"],
+      "description": "Site peak power capability (kW). Must provide this and/or power_structure."
+    },
+    "power_structure": {
+      "description": "Human or structured gun mix, e.g. \"4×250kW + 2×120kW\" or { guns: [{kw:250,n:4},{kw:120,n:2}] }",
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "object",
+          "properties": {
+            "guns": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["kw", "n"],
+                "properties": {
+                  "kw": { "type": "number" },
+                  "n": { "type": "integer", "minimum": 0 }
+                }
+              }
+            },
+            "label": { "type": "string" }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
+    "status": {
+      "type": "string",
+      "description": "Synthetic ops status label, e.g. open | limited | planned"
+    },
+    "open_hours": {
+      "type": ["string", "null"]
+    },
+    "utilization_synth": {
+      "type": ["number", "null"],
+      "description": "Synthetic utilization 0–1 for list sort"
+    },
+    "synthetic": {
+      "type": "boolean",
+      "const": true
+    }
+  }
+}

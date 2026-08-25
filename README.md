@@ -8,7 +8,7 @@ Static shell + Node build pipeline. Synthetic ops metrics on spatial fabric: **O
 
 **Requirements:** Node.js **18+**
 
-**Acceptance truth:** PRD **05.1** (map UX / spatial system).  
+**Acceptance:** map UX / spatial shell → PRD **05.1**；**业务评估（analysis_scene / 可达 E / 能源站点服务圈）→ PRD 05.2**。  
 **Informal only:** `Byteda/P1/demo/*.html` — layout/story preview, **not** this repo’s product data or QC’d roads. Do not demo those HTML files as LBS-Master.
 
 ---
@@ -162,11 +162,12 @@ Portability record: [`docs/portability-check.md`](docs/portability-check.md).
 | `docs/acceptance-side-path.md` | Gate E checklist |
 | `docs/portability-check.md` | Swap-machine / swap-dir proof |
 | `docs/HANDOFF-WS-*.md` | Per-workstream handoffs |
-| `contracts/README.md` | Contract index + 05.1 delta |
+| `contracts/README.md` | Contract index + 05.1/05.2 delta |
 | `docs/osm-download.md` | Overpass download notes |
 | `docs/synthetic-rules.md` | Synthetic metric rules |
 | `docs/alignment-sample.md` | Road/basemap sample notes |
 | Byteda `P1/05.1-…` | Map UX acceptance (external spec) |
+| Byteda `P1/05.2-…` | analysis_scene / accessibility / energy site (external spec) |
 | Byteda `P1/demo/` | Informal layout preview only |
 
 ---

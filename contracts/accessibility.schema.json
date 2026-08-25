@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lbs-master.local/contracts/accessibility.schema.json",
+  "title": "LBS-Master accessibility E",
+  "description": "PRD 05.2 §3.5. Use $defs.FromPointRequest and $defs.AccessibilityResult. Not navigation; Synthetic impedance.",
+  "$defs": {
+    "analysis_scene": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["time_scenario", "weather"],
+      "properties": {
+        "time_scenario": {
+          "type": "string",
+          "enum": [
+            "wd_night",
+            "wd_am_peak",
+            "wd_day_offpeak",
+            "wd_pm_peak",
+            "we_day",
+            "we_night"
+          ]
+        },
+        "weather": {
+          "type": "string",
+          "enum": ["clear", "rain", "extreme"]
+        }
+      }
+    },
+    "FromPointRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "analysis_scene"],
+      "properties": {
+        "source": {
+          "type": "object",
+          "required": ["kind"],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["site", "point", "store"]
+            },
+            "id": { "type": ["string", "null"] },
+            "lng": { "type": "number" },
+            "lat": { "type": "number" }
+          }
+        },
+        "analysis_scene": { "$ref": "#/$defs/analysis_scene" },
+        "bands_min": {
+          "type": "array",
+          "items": { "type": "number" },
+          "default": [5, 10, 15]
+        },
+        "profile": {
+          "type": "string",
+          "default": "car_urban"
+        },
+        "max_radius_m": { "type": "number" },
+        "include_zone_eta": { "type": "boolean" }
+      }
+    },
+    "AccessibilityResult": {
+      "type": "object",
+      "required": ["ok", "synthetic"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "synthetic": { "type": "boolean", "const": true },
+        "error_code": {
+          "type": "string",
+          "enum": ["snap_failed", "qc_blocked", "no_graph", "internal"]
+        },
+        "message": { "type": "string" },
+        "request_echo": { "type": "object" },
+        "snap": {
+          "type": "object",
+          "properties": {
+            "ok": { "type": "boolean" },
+            "lng": { "type": "number" },
+            "lat": { "type": "number" },
+            "road_id": { "type": ["string", "null"] },
+            "snap_dist_m": { "type": "number" }
+          }
+        },
+        "bands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["minutes"],
+            "properties": {
+              "minutes": { "type": "number" },
+              "geometry": { "type": ["object", "null"] },
+              "area_km2": { "type": ["number", "null"] }
+            }
+          }
+        },
+        "zone_coverage": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["zone_id"],
+            "properties": {
+              "zone_id": { "type": "string" },
+              "eta_min": { "type": ["number", "null"] },
+              "in_band": { "type": "object" },
+              "zone_type": { "type": ["string", "null"] },
+              "is_gap": { "type": ["boolean", "null"] }
+            }
+          }
+        },
+        "stats": {
+          "type": "object",
+          "properties": {
+            "nodes_visited": { "type": "number" },
+            "elapsed_ms": { "type": "number" },
+            "roads_qc_ok": { "type": "boolean" }
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}
