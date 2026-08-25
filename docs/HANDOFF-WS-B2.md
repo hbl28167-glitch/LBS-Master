@@ -114,3 +114,16 @@ npm run serve
 # 放大陆家嘴/虹桥/临港；勾选路网保持开
 # docs/roads-qc-report.md → PASS
 ```
+
+## 2026-08-25 · 05.2 增量（典型路段 name 白名单）
+
+| 项 | 结果 |
+|----|------|
+| `qc:roads` | **PASS**（未重下 B2；features=56578, tertiary=10239, largest_ratio≈0.996） |
+| 典型廊道匹配 | 7/7 廊道均有 way 命中（修前 3 条为 0） |
+| 修改 | 仅 `data/static/typical_road_anchors.json` v0.2.1：莘庄→`沪闵高架*`；环西→`外环西路/西线`+`中环西线`；环南→`中环南线` |
+| 未做 | residential 全量、PBF 重抽、真路况 API |
+
+匹配抽检（way 条数级）：南北高架~104 · 北翟~90 · 金沙江~34 · 真北~16 · 沪闵高架~数十 · 外环西/中环西~31 · 中环南线~30。
+
+D 读 `public/data/typical_road_anchors.json` 即可；几何 roads 未改。

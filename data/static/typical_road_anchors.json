@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0",
+  "version": "0.2.1",
   "prd": "05.2 §3.3 early-peak typical segments",
   "synthetic": true,
   "description": "AM-peak mean-speed anchors for name-matched corridors. Strong only under time_scenario=wd_am_peak; rain multiplies via weather_f.",
@@ -16,10 +16,15 @@
     {
       "corridor_id": "xinzhuang_interchange",
       "label_zh": "莘庄立交",
-      "name_keywords": ["莘庄立交", "莘庄"],
+      "name_keywords": [
+        "莘庄立交",
+        "莘庄",
+        "沪闵高架",
+        "沪闵高架路"
+      ],
       "am_peak_speed_kmh": 16.11,
       "ci_boost": 1.35,
-      "note": "southwest gateway"
+      "note": "SW gateway; prefer 沪闵高架* over bare 沪闵路 (too long corridor)"
     },
     {
       "corridor_id": "nanbei_elevated",
@@ -40,10 +45,17 @@
     {
       "corridor_id": "huanxi_avenue",
       "label_zh": "环西一/二大道",
-      "name_keywords": ["环西一大道", "环西二大道", "环西大道"],
+      "name_keywords": [
+        "环西一大道",
+        "环西二大道",
+        "环西大道",
+        "外环西路",
+        "外环西线",
+        "中环西线"
+      ],
       "am_peak_speed_kmh": 24.24,
       "ci_boost": 1.12,
-      "note": "west ring"
+      "note": "west ring; OSM uses 外环西路/西线、中环西线"
     },
     {
       "corridor_id": "jinshajiang_w",
@@ -56,10 +68,15 @@
     {
       "corridor_id": "huannan_avenue",
       "label_zh": "环南一/二大道",
-      "name_keywords": ["环南一大道", "环南二大道", "环南大道"],
+      "name_keywords": [
+        "环南一大道",
+        "环南二大道",
+        "环南大道",
+        "中环南线"
+      ],
       "am_peak_speed_kmh": 27.61,
       "ci_boost": 1.08,
-      "note": "south ring"
+      "note": "south ring; OSM name 中环南线 (avoid bare 外环高速 — too broad)"
     },
     {
       "corridor_id": "zhenbei_interchange",
