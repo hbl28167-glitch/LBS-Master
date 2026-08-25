@@ -22,7 +22,15 @@
       "type": "string",
       "enum": ["ride", "delivery", "chg", "o2o"]
     },
-    "time_of_day": { "type": "string", "minLength": 1 },
+    "time_scenario": {
+      "type": "string",
+      "description": "PRD 05.2 analysis_scene.time_scenario (6 bins). Prefer this field."
+    },
+    "time_of_day": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Alias of time_scenario for legacy loaders; must match when both set."
+    },
     "demand_base": {
       "type": "number",
       "description": "Synthetic index 0–100 (already normalized)"

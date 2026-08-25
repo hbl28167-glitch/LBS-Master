@@ -1,29 +1,31 @@
 /**
- * WS-C · Zone-driven synthetic metrics + dense 小李 entities (05.1 / Byteda-V2-0824).
+ * WS-C · Zone-driven synthetic metrics + site-level 小李 entities (PRD 05.2).
  *
  * ALL business numbers are Synthetic (manifest.synthetic=true).
  * Display brand: 小李* — no employer site names.
  *
  * Primary spatial key: zone_id = sh:z:{type}:{slug} (WS-B zones, frozen).
- * Fine-grid heat: sh:f:{cell_m}:{row}:{col} inherits nearest zone × distance decay.
- * Legacy 1km grids.json is NOT the product metric spine (ui_default_layer=false).
+ * analysis_scene time bins (6): same IDs as data/static/time_scenario.json +
+ *   congestion_coeff / scenario_ci — NO separate TOD table for metrics.
  *
- * ── Zone × TOD shape (05.1 §4.3 direction-locked) ───────────────────
- * dense_mass residential → ride/delivery strong at wd_am + wd_pm
- * office/CBD             → ride noon/pm tide; delivery midday medium
- * retail premium         → o2o strong we_aft / weekend evening
- * hub                    → ride pulse all day; delivery weak–mid
- * scenic                 → weekend/holiday pulse (we_aft + national_day bias)
+ * ── Zone × time_scenario (05.1/05.2 direction-locked) ───────────────
+ * dense_mass residential → ride/delivery strong am+pm peaks
+ * office/CBD             → ride pm tide; offpeak midday medium
+ * retail premium         → o2o strong we_day
+ * hub                    → ride pulse; night chg maintenance story
+ * scenic                 → we_day / national_day pulse
  *
- * grade multipliers on base (retail/residential).
+ * Runtime (WS-D / E) — single difficulty stack:
+ *   analysis_scene = { time_scenario, weather }
+ *   demand = demand_base * weather.demand_{biz} * node_coeff
+ *   supply = supply_base * weather.supply_{biz} * node_coeff / difficulty_{biz}
+ *   difficulty from congestion_coeff.scopes.citywide[weather][time_scenario]
+ *     (derived from scenario_ci city_CI × weather_f)
+ *   gap = demand - supply
  *
- * Runtime (WS-D):
- *   demand = demand_base * weather.demand_{scene} * node_coeff
- *   supply = supply_base * weather.supply_{scene} * node_coeff / difficulty_{scene}
- *   gap    = demand - supply   // identity norm on 0–100 bases
- * difficulty from data/static/congestion_coeff.json (citywide + corridor extras).
- *
- * Entities: 小李充电 800–1500; 小李门店 1500–3000; GCJ near zones.
+ * Entities (site unit, not stall forest):
+ *   小李充电站 800–1500: site_id, stall_count, max_power_kw, power_structure
+ *   小李门店 1500–3000: store_id / site-like list unit
  */
 const fs = require("fs");
 const path = require("path");
@@ -42,8 +44,19 @@ const OUT_HEAT = root("data", "processed", "metrics_heat_fine.json");
 const OUT_CHG_ENT = root("data", "processed", "entities_charger.json");
 const OUT_STORE = root("data", "processed", "entities_store.json");
 
-const TIMES = ["wd_am_peak", "wd_pm_peak", "we_aft"];
+/** PRD 05.2 §3.2.1 — must match time_scenario.json / congestion_coeff keys */
+const TIMES = [
+  "wd_night",
+  "wd_am_peak",
+  "wd_day_offpeak",
+  "wd_pm_peak",
+  "we_day",
+  "we_night"
+];
+/** Fine heat uses peak + weekend day only (size); full 6 on zone metrics */
+const HEAT_TIMES = ["wd_am_peak", "wd_pm_peak", "we_day"];
 const SCENES = ["ride", "delivery", "chg", "o2o"];
+const LEGACY_TOD_ALIAS = { we_aft: "we_day", wd_noon: "wd_day_offpeak" };
 
 /** Base demand/supply by zone_type (clear/baseline skeleton) */
 const TYPE_BASE = {
@@ -92,9 +105,18 @@ const TYPE_BASE = {
 };
 
 /**
- * TOD multipliers [demand, supply] by type — 05.1 table directions.
+ * time_scenario multipliers [demand, supply] by zone_type — 05.2 six bins.
  */
 const TOD_MUL = {
+  wd_night: {
+    retail: { ride: [0.45, 0.7], delivery: [0.5, 0.75], chg: [1.15, 1.05], o2o: [0.35, 0.6] },
+    residential: { ride: [0.55, 0.85], delivery: [0.6, 0.8], chg: [1.2, 1.0], o2o: [0.4, 0.7] },
+    office: { ride: [0.35, 0.55], delivery: [0.4, 0.6], chg: [0.9, 0.95], o2o: [0.3, 0.55] },
+    industrial: { ride: [0.4, 0.65], delivery: [0.45, 0.7], chg: [0.95, 1.0], o2o: [0.25, 0.5] },
+    hub: { ride: [0.85, 0.8], delivery: [0.55, 0.75], chg: [1.25, 1.0], o2o: [0.4, 0.65] },
+    scenic: { ride: [0.35, 0.6], delivery: [0.4, 0.65], chg: [0.7, 0.85], o2o: [0.3, 0.55] },
+    rural: { ride: [0.4, 0.7], delivery: [0.4, 0.7], chg: [0.75, 0.9], o2o: [0.25, 0.5] }
+  },
   wd_am_peak: {
     retail: { ride: [0.9, 0.95], delivery: [0.95, 1.0], chg: [0.85, 1.0], o2o: [0.75, 0.95] },
     residential: { ride: [1.4, 0.85], delivery: [1.35, 0.88], chg: [0.9, 1.0], o2o: [0.85, 0.95] },
@@ -103,6 +125,15 @@ const TOD_MUL = {
     hub: { ride: [1.35, 0.9], delivery: [0.95, 0.95], chg: [1.1, 0.95], o2o: [0.8, 0.9] },
     scenic: { ride: [0.75, 0.85], delivery: [0.8, 0.9], chg: [0.7, 0.9], o2o: [0.7, 0.85] },
     rural: { ride: [0.95, 1.0], delivery: [0.9, 1.0], chg: [0.85, 1.0], o2o: [0.7, 0.9] }
+  },
+  wd_day_offpeak: {
+    retail: { ride: [0.95, 1.0], delivery: [1.0, 1.0], chg: [0.95, 1.0], o2o: [1.05, 1.0] },
+    residential: { ride: [0.85, 1.05], delivery: [0.95, 1.0], chg: [0.9, 1.0], o2o: [0.9, 1.0] },
+    office: { ride: [1.05, 1.0], delivery: [1.15, 1.0], chg: [1.0, 1.0], o2o: [1.1, 1.0] },
+    industrial: { ride: [0.9, 1.0], delivery: [0.95, 1.0], chg: [0.95, 1.0], o2o: [0.7, 0.9] },
+    hub: { ride: [1.1, 0.95], delivery: [0.9, 0.95], chg: [1.05, 0.95], o2o: [0.85, 0.95] },
+    scenic: { ride: [0.85, 0.9], delivery: [0.85, 0.9], chg: [0.8, 0.9], o2o: [0.9, 0.95] },
+    rural: { ride: [0.8, 1.0], delivery: [0.85, 1.0], chg: [0.8, 1.0], o2o: [0.7, 0.9] }
   },
   wd_pm_peak: {
     retail: { ride: [1.2, 1.0], delivery: [1.25, 0.95], chg: [1.15, 0.95], o2o: [1.15, 1.0] },
@@ -113,7 +144,7 @@ const TOD_MUL = {
     scenic: { ride: [0.95, 0.9], delivery: [0.95, 0.9], chg: [0.85, 0.9], o2o: [1.0, 0.95] },
     rural: { ride: [0.9, 1.0], delivery: [0.95, 1.0], chg: [0.9, 1.0], o2o: [0.75, 0.95] }
   },
-  we_aft: {
+  we_day: {
     retail: { ride: [1.15, 1.05], delivery: [1.2, 1.0], chg: [1.25, 0.9], o2o: [1.45, 1.05] },
     residential: { ride: [1.05, 1.1], delivery: [1.2, 1.0], chg: [1.1, 0.95], o2o: [1.15, 1.0] },
     office: { ride: [0.55, 0.7], delivery: [0.65, 0.75], chg: [0.7, 0.8], o2o: [0.6, 0.75] },
@@ -121,6 +152,15 @@ const TOD_MUL = {
     hub: { ride: [1.25, 0.95], delivery: [1.0, 0.95], chg: [1.15, 0.95], o2o: [0.9, 0.95] },
     scenic: { ride: [1.4, 1.0], delivery: [1.15, 0.95], chg: [1.0, 0.9], o2o: [1.3, 1.0] },
     rural: { ride: [0.85, 0.95], delivery: [0.9, 0.95], chg: [0.8, 0.95], o2o: [0.8, 0.9] }
+  },
+  we_night: {
+    retail: { ride: [0.7, 0.85], delivery: [0.75, 0.85], chg: [1.05, 0.95], o2o: [0.85, 0.9] },
+    residential: { ride: [0.75, 0.95], delivery: [0.85, 0.9], chg: [1.1, 0.95], o2o: [0.7, 0.85] },
+    office: { ride: [0.4, 0.6], delivery: [0.45, 0.65], chg: [0.65, 0.8], o2o: [0.4, 0.6] },
+    industrial: { ride: [0.4, 0.65], delivery: [0.45, 0.7], chg: [0.6, 0.8], o2o: [0.35, 0.55] },
+    hub: { ride: [1.05, 0.9], delivery: [0.8, 0.9], chg: [1.1, 0.95], o2o: [0.7, 0.85] },
+    scenic: { ride: [0.9, 0.9], delivery: [0.85, 0.9], chg: [0.85, 0.9], o2o: [0.95, 0.95] },
+    rural: { ride: [0.55, 0.8], delivery: [0.6, 0.85], chg: [0.7, 0.9], o2o: [0.5, 0.75] }
   }
 };
 
@@ -220,11 +260,57 @@ function metricRow(z, scene, tod) {
     grid_id: z.zone_id,
     unit_kind: "zone",
     scene,
+    time_scenario: tod,
     time_of_day: tod,
     demand_base,
     supply_base,
     zone_type: z.zone_type,
     grade: z.grade || null
+  };
+}
+
+/**
+ * Site power mix (05.2 §3.6.2). Unit = site, not stall forest.
+ * Returns stall_count, max_power_kw, power_structure, power_tier_label.
+ */
+function sitePowerProfile(siteKey, zoneType) {
+  const h = hash01(`${siteKey}|pwr`);
+  let guns;
+  if (zoneType === "hub" || (zoneType === "retail" && h > 0.55)) {
+    // hub / premium retail: high-power mix
+    const n250 = 2 + Math.floor(hash01(`${siteKey}|250`) * 5); // 2–6
+    const n120 = 2 + Math.floor(hash01(`${siteKey}|120`) * 4); // 2–5
+    guns = [
+      { kw: 250, n: n250 },
+      { kw: 120, n: n120 }
+    ];
+  } else if (zoneType === "office" || zoneType === "industrial" || h > 0.35) {
+    const n120 = 4 + Math.floor(hash01(`${siteKey}|a`) * 6);
+    const n60 = 2 + Math.floor(hash01(`${siteKey}|b`) * 4);
+    guns = [
+      { kw: 120, n: n120 },
+      { kw: 60, n: n60 }
+    ];
+  } else {
+    const n60 = 4 + Math.floor(hash01(`${siteKey}|c`) * 8);
+    const n7 = Math.floor(hash01(`${siteKey}|d`) * 4);
+    guns = [{ kw: 60, n: n60 }];
+    if (n7 > 0) guns.push({ kw: 7, n: n7 });
+  }
+  const stall_count = guns.reduce((s, g) => s + g.n, 0);
+  const max_power_kw = Math.max(...guns.map((g) => g.kw));
+  const total_rated_kw = guns.reduce((s, g) => s + g.kw * g.n, 0);
+  const label = guns.map((g) => `${g.n}×${g.kw}kW`).join(" + ");
+  let power_tier_label = "60kW 级";
+  if (max_power_kw >= 250) power_tier_label = "250kW 级";
+  else if (max_power_kw >= 120) power_tier_label = "120kW 级";
+  return {
+    stall_count,
+    max_power_kw,
+    total_rated_kw,
+    power_structure: { guns, label },
+    power_structure_label: label,
+    power_tier_label
   };
 }
 
@@ -246,11 +332,10 @@ function nearestZone(lng, lat, zones, cacheHint) {
 }
 
 /**
- * Scatter entities around zone centroids (ellipse-ish using rx_m/ry_m).
+ * Scatter **sites** around zone centroids (AOI radius). Map/list unit = site.
  */
 function scatterEntities(zones, kind, target) {
   const brand = kind === "charger" ? "小李充电" : "小李门店";
-  const prefix = kind === "charger" ? "xl_chg" : "xl_store";
   // weight by type suitability
   const weight = (z) => {
     const t = z.zone_type;
@@ -261,7 +346,6 @@ function scatterEntities(zones, kind, target) {
       if (t === "scenic") return 1.0;
       return 0.35;
     }
-    // store
     if (t === "retail") return 3.5;
     if (t === "residential") return 2.8;
     if (t === "office") return 1.6;
@@ -275,89 +359,95 @@ function scatterEntities(zones, kind, target) {
   const entities = [];
   let seq = 1;
 
-  for (const z of pool) {
-    const n = Math.max(1, Math.round((weight(z) / totalW) * target));
+  function pushOne(z, iTag) {
+    const h = hash01(`${z.zone_id}|${kind}|${iTag}`);
+    const h2 = hash01(`${z.zone_id}|${kind}|r|${iTag}`);
     const rx = (z.rx_m || 600) / 111320;
     const ry =
       (z.ry_m || 500) / (111320 * Math.cos((z.centroid_lat * Math.PI) / 180));
+    const ang = h * Math.PI * 2;
+    const rad = 0.15 + 0.85 * Math.sqrt(h2);
+    const lng =
+      Math.round((z.centroid_lng + Math.cos(ang) * rx * rad) * 1e6) / 1e6;
+    const lat =
+      Math.round((z.centroid_lat + Math.sin(ang) * ry * rad) * 1e6) / 1e6;
+    const num = String(seq).padStart(4, "0");
+    if (kind === "charger") {
+      const site_id = `sh:site:xl-${num}`;
+      const pwr = sitePowerProfile(site_id, z.zone_type);
+      const util = Math.round((0.25 + 0.55 * hash01(`${site_id}|u`)) * 100) / 100;
+      entities.push({
+        site_id,
+        entity_id: site_id,
+        unit_kind: "site",
+        brand,
+        name: `${brand}站-${num}`,
+        lng,
+        lat,
+        crs: "GCJ-02",
+        zone_id: z.zone_id,
+        stall_count: pwr.stall_count,
+        max_power_kw: pwr.max_power_kw,
+        total_rated_kw: pwr.total_rated_kw,
+        power_structure: pwr.power_structure,
+        power_structure_label: pwr.power_structure_label,
+        power_tier_label: pwr.power_tier_label,
+        // legacy aliases (compat loaders)
+        stalls: pwr.stall_count,
+        power_kw: pwr.max_power_kw,
+        status: hash01(`${site_id}|st`) > 0.92 ? "limited" : "open",
+        open_hours: "00:00-24:00",
+        utilization_synth: util,
+        synthetic: true
+      });
+    } else {
+      const store_id = `sh:store:xl-${num}`;
+      entities.push({
+        store_id,
+        site_id: store_id,
+        entity_id: store_id,
+        unit_kind: "store",
+        brand,
+        name: `${brand}-${num}`,
+        lng,
+        lat,
+        crs: "GCJ-02",
+        zone_id: z.zone_id,
+        store_type: z.zone_type === "retail" ? "flagship_or_mall" : "community",
+        status: "open",
+        synthetic: true
+      });
+    }
+    seq++;
+  }
+
+  for (const z of pool) {
+    const n = Math.max(1, Math.round((weight(z) / totalW) * target));
     for (let i = 0; i < n && entities.length < target + 50; i++) {
-      const h = hash01(`${z.zone_id}|${kind}|${i}`);
-      const h2 = hash01(`${z.zone_id}|${kind}|r|${i}`);
-      const ang = h * Math.PI * 2;
-      const rad = 0.15 + 0.85 * Math.sqrt(h2);
-      const lng =
-        Math.round((z.centroid_lng + Math.cos(ang) * rx * rad) * 1e6) / 1e6;
-      const lat =
-        Math.round((z.centroid_lat + Math.sin(ang) * ry * rad) * 1e6) / 1e6;
-      const id = `${prefix}_${String(seq).padStart(4, "0")}`;
-      if (kind === "charger") {
-        entities.push({
-          entity_id: id,
-          brand,
-          name: `${brand}-${String(seq).padStart(4, "0")}`,
-          lng,
-          lat,
-          crs: "GCJ-02",
-          stalls: 4 + Math.floor(hash01(`${id}|st`) * 13),
-          power_kw: hash01(`${id}|pw`) > 0.5 ? 120 : 60,
-          status: "open",
-          zone_id: z.zone_id,
-          synthetic: true
-        });
-      } else {
-        entities.push({
-          entity_id: id,
-          brand,
-          name: `${brand}-${String(seq).padStart(4, "0")}`,
-          lng,
-          lat,
-          crs: "GCJ-02",
-          store_type: z.zone_type === "retail" ? "flagship_or_mall" : "community",
-          status: "open",
-          zone_id: z.zone_id,
-          synthetic: true
-        });
-      }
-      seq++;
+      pushOne(z, i);
     }
   }
 
-  // trim/pad to band
   if (entities.length > target) entities.length = target;
   while (entities.length < Math.min(target, kind === "charger" ? 800 : 1500)) {
     const z = pool[entities.length % pool.length];
-    const h = hash01(`pad|${kind}|${entities.length}`);
-    const lng = Math.round((z.centroid_lng + (h - 0.5) * 0.01) * 1e6) / 1e6;
-    const lat =
-      Math.round((z.centroid_lat + (hash01(`pad2|${entities.length}`) - 0.5) * 0.008) *
-        1e6) / 1e6;
-    seq++;
-    const id = `${prefix}_${String(seq).padStart(4, "0")}`;
-    entities.push({
-      entity_id: id,
-      brand,
-      name: `${brand}-${String(seq).padStart(4, "0")}`,
-      lng,
-      lat,
-      crs: "GCJ-02",
-      status: "open",
-      zone_id: z.zone_id,
-      synthetic: true,
-      ...(kind === "charger"
-        ? { stalls: 6, power_kw: 60 }
-        : { store_type: "community" })
-    });
+    pushOne(z, `pad${entities.length}`);
   }
   return entities;
 }
 
 function writeMetricsDoc(scene, rows, extra) {
   return {
-    version: "0.2.0",
+    version: "0.3.0",
     synthetic: true,
+    prd: "05.2",
     scene,
     unit_kind_primary: "zone",
+    time_scenario_keys: TIMES,
     time_of_day_keys: TIMES,
+    legacy_tod_alias: LEGACY_TOD_ALIAS,
+    analysis_scene_note:
+      "time_of_day === time_scenario (6 bins). difficulty from congestion_coeff[weather][time_scenario] aligned with scenario_ci.json",
     unit: "index_0_100",
     zone_id_rule: "sh:z:{type}:{slug}",
     count: rows.length,
@@ -444,7 +534,7 @@ function main() {
       // influence radius ~ zone size + buffer
       const R = Math.max(zone.rx_m || 800, zone.ry_m || 800) * 1.8;
       const decay = d > R * 2.5 ? 0.08 : Math.max(0.12, 1 - d / (R * 2.5));
-      for (const tod of TIMES) {
+      for (const tod of HEAT_TIMES) {
         for (const scene of ["ride", "delivery"]) {
           const { demand_base, supply_base } = zoneBases(zone, scene, tod);
           heatRows.push({
@@ -453,6 +543,7 @@ function main() {
             unit_kind: "fine_grid",
             cell_m: cell.cell_m,
             scene,
+            time_scenario: tod,
             time_of_day: tod,
             demand_base: clamp100(demand_base * decay),
             supply_base: clamp100(supply_base * Math.min(1.05, decay + 0.08))
@@ -482,11 +573,14 @@ function main() {
   fs.writeFileSync(
     OUT_ZONE,
     JSON.stringify({
-      version: "0.2.0",
+      version: "0.3.0",
       synthetic: true,
+      prd: "05.2",
       unit_kind_primary: "zone",
       scenes: SCENES,
+      time_scenario_keys: TIMES,
       time_of_day_keys: TIMES,
+      legacy_tod_alias: LEGACY_TOD_ALIAS,
       zone_id_rule: zdoc.zone_id_rule || "sh:z:{type}:{slug}",
       count: allZoneRows.length,
       rows: allZoneRows
@@ -516,29 +610,40 @@ function main() {
   fs.writeFileSync(
     OUT_HEAT,
     JSON.stringify({
-      version: "0.2.0",
+      version: "0.3.0",
       synthetic: true,
       unit_kind: "fine_grid",
       purpose: "heat_mode_fine_grid",
       scenes: ["ride", "delivery"],
-      time_of_day_keys: TIMES,
+      time_scenario_keys: HEAT_TIMES,
+      time_of_day_keys: HEAT_TIMES,
+      note_times:
+        "Heat sparse on HEAT_TIMES only; full 6 bins on zone metrics. Alias we_aft→we_day.",
       grid_id_rule: "sh:f:{cell_m}:{row}:{col}",
       fine_cells_source: fineCount,
       count: heatRows.length,
-      note: "Same indicator family as zone metrics; decay from nearest zone centroid. KDE left to D.",
+      note: "Same indicator family as zone metrics; decay from nearest zone. KDE left to D.",
       rows: heatRows
     })
   );
+
+  const totalRated = chargers.reduce((s, e) => s + (e.total_rated_kw || 0), 0);
   fs.writeFileSync(
     OUT_CHG_ENT,
     JSON.stringify(
       {
-        version: "0.2.0",
+        version: "0.3.0",
         synthetic: true,
+        prd: "05.2 §3.6",
+        unit_kind: "site",
         brand: "小李充电",
         crs: "GCJ-02",
         count: chargers.length,
-        entities: chargers
+        site_count: chargers.length,
+        total_rated_kw_sum: totalRated,
+        note: "List/map unit = site. stall_count/power are site attributes; not stall forest.",
+        entities: chargers,
+        sites: chargers
       },
       null,
       2
@@ -548,12 +653,15 @@ function main() {
     OUT_STORE,
     JSON.stringify(
       {
-        version: "0.2.0",
+        version: "0.3.0",
         synthetic: true,
+        prd: "05.2",
+        unit_kind: "store",
         brand: "小李门店",
         crs: "GCJ-02",
         count: stores.length,
-        entities: stores
+        entities: stores,
+        stores
       },
       null,
       2
@@ -561,10 +669,10 @@ function main() {
   );
 
   console.log(
-    `synthetic(zone): zones=${zones.length} zone_rows=${allZoneRows.length} heat=${heatRows.length} chargers=${chargers.length} stores=${stores.length}`
+    `synthetic(05.2): zones=${zones.length} zone_rows=${allZoneRows.length} heat=${heatRows.length} sites=${chargers.length} stores=${stores.length} rated_kw≈${Math.round(totalRated)}`
   );
   console.log("  → metrics_zone / ride / delivery / chg / o2o / heat_fine");
-  console.log("  → entities_charger / entities_store");
+  console.log("  → entities_charger (site) / entities_store");
 }
 
 main();
