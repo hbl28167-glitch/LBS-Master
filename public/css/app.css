@@ -102,7 +102,45 @@ header.topbar {
   font-size: 12px;
   color: var(--muted);
 }
-.ctx label { display: inline-flex; align-items: center; gap: 4px; }
+.ctx-scene { gap: 10px 14px; }
+.scene-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.scene-card-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+.scene-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #3a6ea5;
+  background: rgba(97, 175, 239, 0.12);
+  color: #cde8ff;
+  font-size: 11px;
+  font-weight: 600;
+}
+.ctx-sep { color: var(--border); }
+.ctx-lens-label { font-size: 11px; }
+.ctx button.lens {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--muted);
+  padding: 3px 8px;
+  font-size: 11px;
+}
+.ctx button.lens:hover { border-color: var(--accent); color: var(--text); }
+.ctx label, .ctx-node { display: inline-flex; align-items: center; gap: 4px; }
 .ctx select, .ctx button, .side button, .card button, .card .chip {
   background: var(--panel2);
   color: var(--text);
@@ -114,6 +152,39 @@ header.topbar {
 }
 .ctx button.primary { background: #1e3a5f; border-color: #3a6ea5; }
 .ctx button:disabled { opacity: 0.5; cursor: not-allowed; }
+.legend-synth {
+  margin-top: 4px;
+  font-size: 9px;
+  color: var(--warn);
+  opacity: 0.9;
+}
+.trend-card {
+  margin-top: 8px;
+  padding: 8px;
+  background: #0f1720;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.trend-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.trend-head strong { font-size: 11px; color: var(--text); }
+.trend-foot {
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--muted);
+}
+#trend-svg { display: block; cursor: pointer; }
+#trend-svg .trend-line { fill: none; stroke: #61afef; stroke-width: 1.8; }
+#trend-svg .trend-area { fill: rgba(97, 175, 239, 0.12); }
+#trend-svg .trend-cursor { stroke: #f07178; stroke-width: 1.5; stroke-dasharray: 3 2; }
+#trend-svg .trend-dot { fill: #f07178; }
+#trend-svg .trend-axis { stroke: #2a364a; stroke-width: 1; }
+#trend-svg text { fill: var(--muted); font-size: 8px; }
 
 .story {
   flex-shrink: 0;
@@ -171,19 +242,54 @@ header.topbar {
   background: #0d1520;
 }
 
+/*
+  Layout priority: never cover zoom.
+  Zoom = Leaflet bottomleft. Unified dock = top-left (layers + modes together).
+  Legend = bottom-right (away from zoom).
+*/
 .map-float {
   position: absolute;
   z-index: 500;
-  left: 12px;
-  top: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
   max-width: 250px;
+  pointer-events: none;
 }
-.map-float.bottom {
+.map-float .card {
+  pointer-events: auto;
+}
+.map-float.map-float-tl {
+  left: 12px;
+  top: 12px;
+  right: auto;
+  bottom: auto;
+  max-height: calc(100% - 96px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.map-float.map-float-br {
   top: auto;
   bottom: 28px;
+  left: auto;
+  right: 12px;
+}
+.map-float.hidden,
+#legend-float.hidden {
+  display: none !important;
+}
+.layers-card label {
+  font-size: 11px;
+}
+.layers-hint {
+  margin-top: 6px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+/* Keep attribution / zoom clear on bottom-left */
+.leaflet-bottom.leaflet-left {
+  z-index: 600;
 }
 .card {
   background: rgba(18, 26, 40, 0.95);

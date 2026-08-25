@@ -5,22 +5,20 @@
     const opts = options || {};
     const amapKey = (opts.amapKey || "").trim();
     const map = L.map(elId, {
-      zoomControl: true,
+      zoomControl: false,
       preferCanvas: true,
       minZoom: 9,
       maxZoom: 17
     });
     map.setView([31.23, 121.48], 12);
+    // Zoom bottom-left: NW free for layer dock (no overlap)
+    L.control.zoom({ position: "bottomleft" }).addTo(map);
 
-    // Basemap strategy (05.1: 高德仅底图):
-    // 1) Prefer Gaode vector-style raster (GCJ). Official open-platform apps
-    //    should set amapKey in config.local.js; some webrd endpoints still
-    //    paint without key but are rate-limited / intermittently blocked.
-    // 2) On repeated tile errors → swap to Carto dark fallback (WGS; may
-    //    look slightly offset vs GCJ roads — expected without Gaode).
+    // Basemap: Gaode raster tiles only (GCJ). Toggle via showLayer("basemap").
+    // Optional amapKey in config.local.js. No third-party basemap fallback.
     let basemapOk = false;
+    let basemapWanted = true;
     let basemapLayer = null;
-    let fallbackLayer = null;
     let tileErrs = 0;
     const keyQ = amapKey ? "&key=" + encodeURIComponent(amapKey) : "";
     const gaodeUrl =
@@ -39,23 +37,8 @@
     });
     basemapLayer.on("tileerror", function () {
       tileErrs += 1;
-      if (tileErrs >= 6 && !fallbackLayer) {
-        try {
-          map.removeLayer(basemapLayer);
-        } catch (e) {}
-        fallbackLayer = L.tileLayer(
-          "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-          {
-            subdomains: "abcd",
-            maxZoom: 18,
-            attribution: "© CARTO · © OSM · fallback basemap"
-          }
-        );
-        fallbackLayer.addTo(map);
-        basemapOk = false;
-        if (typeof opts.onBasemapFallback === "function") {
-          opts.onBasemapFallback(amapKey ? "gaode_tile_error" : "no_or_bad_key");
-        }
+      if (tileErrs >= 8 && typeof opts.onBasemapFallback === "function") {
+        opts.onBasemapFallback(amapKey ? "gaode_tile_error" : "no_or_bad_key");
       }
     });
     basemapLayer.addTo(map);
@@ -236,10 +219,12 @@
 
       const mode = ctx.mode || "cong";
       const lod = ctx.lod || "district";
-      const cityIndex = ctx.cityIndex != null ? ctx.cityIndex : 0.55;
+      const cityIndex = ctx.cityIndex != null ? ctx.cityIndex : 1.3;
       const weather = ctx.weather || "clear";
-      const tod = ctx.tod || "wd_pm_peak";
+      const tod = ctx.tod || ctx.time_scenario || "wd_pm_peak";
       const difficulty = ctx.difficulty != null ? ctx.difficulty : 1;
+      const scenarioCi = ctx.scenarioCi || null;
+      const anchorsDoc = ctx.anchorsDoc || null;
       const zoom = map.getZoom();
       const show = ctx.show !== false;
 
@@ -267,9 +252,19 @@
       }
 
       const fc = { type: "FeatureCollection", features: use };
+      const styleOpts = {
+        mode: mode,
+        cityIndex: cityIndex,
+        weather: weather,
+        tod: tod,
+        difficulty: difficulty,
+        zoom: zoom,
+        scenarioCi: scenarioCi,
+        anchorsDoc: anchorsDoc
+      };
       roadsCanvas = L.geoJSON(fc, {
         style: function (f) {
-          return styleRoad(f, mode, cityIndex, weather, tod, difficulty, zoom);
+          return styleRoad(f, styleOpts);
         },
         onEachFeature: function (f, layer) {
           const p = f.properties || {};
@@ -278,11 +273,20 @@
           layer.on("click", function (e) {
             L.DomEvent.stopPropagation(e);
             if (onRoadClick) {
-              const cong = LBSMetrics.wayCongestion(p, cityIndex, weather, tod);
+              const meta = LBSMetrics.wayCI(p, {
+                scenarioCi: scenarioCi,
+                anchorsDoc: anchorsDoc,
+                time_scenario: tod,
+                weather: weather
+              });
+              const cong = LBSMetrics.wayCongestion(p, cityIndex, weather, tod, {
+                scenarioCi: scenarioCi,
+                anchorsDoc: anchorsDoc
+              });
               const ll = e.latlng
                 ? [e.latlng.lat, e.latlng.lng]
                 : firstLatLng(f);
-              onRoadClick(id, p, cong, f, ll);
+              onRoadClick(id, p, cong, f, ll, meta);
             }
           });
           const nm = p.name || p.ref || "未命名路段";
@@ -325,15 +329,25 @@
         .slice(0, n);
     }
 
-    function styleRoad(f, mode, cityIndex, weather, tod, difficulty, zoom) {
+    function styleRoad(f, o) {
       const p = f.properties || {};
       const hw = p.highway || "";
-      const cong = LBSMetrics.wayCongestion(p, cityIndex, weather, tod);
+      const mode = o.mode || "cong";
+      const meta = LBSMetrics.wayCI(p, {
+        scenarioCi: o.scenarioCi,
+        anchorsDoc: o.anchorsDoc,
+        time_scenario: o.tod,
+        weather: o.weather
+      });
+      const cong = LBSMetrics.wayCongestion(p, o.cityIndex, o.weather, o.tod, {
+        scenarioCi: o.scenarioCi,
+        anchorsDoc: o.anchorsDoc
+      });
       let color = "#94a3b8";
       if (mode === "grade") color = LBSMetrics.gradeColor(hw);
-      else if (mode === "biz") color = LBSMetrics.bizColor(cong, difficulty);
-      else color = LBSMetrics.congColor(cong);
-      const w = LBSMetrics.gradeWeight(hw, zoom);
+      else if (mode === "biz") color = LBSMetrics.bizColor(cong, o.difficulty);
+      else color = meta.color || LBSMetrics.congColor(meta.cong_class);
+      const w = LBSMetrics.gradeWeight(hw, o.zoom);
       return {
         color: color,
         weight: w,
@@ -502,6 +516,15 @@
     }
 
     function showLayer(name, on) {
+      if (name === "basemap") {
+        basemapWanted = !!on;
+        if (on) {
+          if (!map.hasLayer(basemapLayer)) basemapLayer.addTo(map);
+        } else if (map.hasLayer(basemapLayer)) {
+          map.removeLayer(basemapLayer);
+        }
+        return;
+      }
       const mapL = {
         water: waterLayer,
         zones: zoneBaseLayer,
@@ -514,6 +537,10 @@
       if (!ly) return;
       if (on && !map.hasLayer(ly)) ly.addTo(map);
       if (!on && map.hasLayer(ly)) map.removeLayer(ly);
+    }
+
+    function isBasemapOn() {
+      return basemapWanted && map.hasLayer(basemapLayer);
     }
 
     function fitBbox(bbox) {
@@ -557,6 +584,7 @@
       setSitingMarkers: setSitingMarkers,
       clearOverlay: clearOverlay,
       showLayer: showLayer,
+      isBasemapOn: isBasemapOn,
       fitBbox: fitBbox,
       focusLatLng: focusLatLng
     };

@@ -38,7 +38,11 @@
       roads_meta,
       stores,
       chargers,
-      roads
+      roads,
+      time_scenario,
+      scenario_ci,
+      ci_series_24h,
+      typical_road_anchors
     ] = await Promise.all([
       fetchJson("manifest.json"),
       fetchJson("zones_shanghai.geojson"),
@@ -60,7 +64,11 @@
       tryJson("roads_meta.json", {}),
       tryJson("entities_store.json", { entities: [] }),
       tryJson("entities_charger.json", { entities: [] }),
-      tryJson("roads_gcj.geojson", null)
+      tryJson("roads_gcj.geojson", null),
+      tryJson("time_scenario.json", null),
+      tryJson("scenario_ci.json", null),
+      tryJson("ci_series_24h.json", null),
+      tryJson("typical_road_anchors.json", null)
     ]);
 
     return {
@@ -82,6 +90,10 @@
       stores: stores,
       chargers: chargers,
       roads: roads,
+      time_scenario: time_scenario,
+      scenario_ci: scenario_ci,
+      ci_series_24h: ci_series_24h,
+      typical_road_anchors: typical_road_anchors,
       heat_fine: null,
       grids_fine: null
     };

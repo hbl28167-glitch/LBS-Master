@@ -203,35 +203,198 @@
       });
   }
 
-  /** Per-way synthetic congestion 0–1 from class × city index × hash */
-  function wayCongestion(props, cityIndex, weather, tod) {
+  const TIME6 = [
+    "wd_night",
+    "wd_am_peak",
+    "wd_day_offpeak",
+    "wd_pm_peak",
+    "we_day",
+    "we_night"
+  ];
+
+  function normalizeTimeScenario(t) {
+    if (!t) return "wd_pm_peak";
+    if (TIME6.indexOf(t) >= 0) return t;
+    if (t === "we_aft") return "we_day";
+    if (t === "wd_noon") return "wd_day_offpeak";
+    return "wd_pm_peak";
+  }
+
+  /** city_CI × weather_f from scenario_ci.json (05.2) */
+  function lookupCityCI(scenarioCi, timeScenario, weather) {
+    const ts = normalizeTimeScenario(timeScenario);
+    const w = weather || "clear";
+    if (
+      scenarioCi &&
+      scenarioCi.lookup_city_ci &&
+      scenarioCi.lookup_city_ci[w] &&
+      scenarioCi.lookup_city_ci[w][ts] != null
+    ) {
+      return Number(scenarioCi.lookup_city_ci[w][ts]);
+    }
+    const base =
+      (scenarioCi && scenarioCi.city_CI && scenarioCi.city_CI[ts]) || 1.3;
+    const wf =
+      (scenarioCi && scenarioCi.weather_f && scenarioCi.weather_f[w]) || 1;
+    return Number(base) * Number(wf);
+  }
+
+  function highwayClassFactor(hw) {
+    const h = hw || "";
+    if (/motorway/.test(h)) return 1.18;
+    if (/trunk/.test(h)) return 1.12;
+    if (/primary/.test(h)) return 1.06;
+    if (/secondary/.test(h)) return 0.98;
+    if (/tertiary/.test(h)) return 0.9;
+    return 0.95;
+  }
+
+  function matchAnchor(props, anchorsDoc, timeScenario) {
+    const ts = normalizeTimeScenario(timeScenario);
+    if (!anchorsDoc || !anchorsDoc.anchors) return null;
+    const active = anchorsDoc.active_time_scenarios || ["wd_am_peak"];
+    if (active.indexOf(ts) < 0) return null;
+    const name = String(
+      (props && (props.name || props["name:zh"] || props.ref)) || ""
+    );
+    if (!name) return null;
+    const low = name.toLowerCase();
+    for (let i = 0; i < anchorsDoc.anchors.length; i++) {
+      const a = anchorsDoc.anchors[i];
+      const kws = a.name_keywords || [];
+      for (let j = 0; j < kws.length; j++) {
+        if (name.indexOf(kws[j]) >= 0 || low.indexOf(String(kws[j]).toLowerCase()) >= 0) {
+          return a;
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * CI_way (05.2): city_CI * weather_f * class_f [* anchor boost on am peak]
+   * Returns { ci, cong_class, color, speed_kmh, anchor }
+   */
+  function wayCI(props, opts) {
+    const o = opts || {};
+    const scenarioCi = o.scenarioCi;
+    const anchorsDoc = o.anchorsDoc;
+    const ts = normalizeTimeScenario(o.time_scenario || o.tod);
+    const weather = o.weather || "clear";
     const hw = (props && props.highway) || "tertiary";
-    const base = cityIndex != null ? cityIndex : 0.5;
-    let classBias = 0.1;
-    if (/motorway|trunk/.test(hw)) classBias = 0.22;
-    else if (/primary/.test(hw)) classBias = 0.18;
-    else if (/secondary/.test(hw)) classBias = 0.12;
-    else if (/tertiary/.test(hw)) classBias = 0.08;
+    const city = lookupCityCI(scenarioCi, ts, weather);
+    const classF = highwayClassFactor(hw);
+    let ci = city * classF;
+    const anchor = matchAnchor(props, anchorsDoc, ts);
+    if (anchor && anchor.ci_boost) {
+      ci = Math.max(ci, city * Number(anchor.ci_boost));
+    }
+    // light name jitter so not flat bands
     const id = String((props && (props.osm_id || props.name)) || hw);
     let h = 0;
     for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 1000;
-    const jitter = (h / 1000) * 0.25 - 0.08;
-    let rainBoost = weather === "rain" ? 0.12 : weather === "extreme" ? 0.2 : 0;
-    let peakBoost = /peak/.test(tod || "") ? 0.08 : 0;
-    // Cross-river / bridge name hints
-    const name = ((props && props.name) || "") + "";
-    if (/桥|隧道|过江|越江|长江|黄浦/.test(name)) {
-      rainBoost += 0.06;
-      peakBoost += 0.05;
+    ci *= 0.96 + (h / 1000) * 0.08;
+    const cls = congClassFromCI(ci, scenarioCi);
+    const v0map =
+      (scenarioCi && scenarioCi.v0_kmh_by_highway) || {};
+    let v0 = v0map[hw] != null ? v0map[hw] : v0map.default != null ? v0map.default : 28;
+    if (anchor && anchor.am_peak_speed_kmh != null && ts === "wd_am_peak") {
+      v0 = Number(anchor.am_peak_speed_kmh);
     }
-    if (/临港|两港|东海/.test(name)) peakBoost += 0.04;
-    return Math.max(0, Math.min(1, base * 0.75 + classBias + jitter + rainBoost + peakBoost));
+    const speed = v0 / Math.max(ci, 0.5);
+    return {
+      ci: ci,
+      cong_class: cls,
+      color: congClassColor(cls),
+      speed_kmh: speed,
+      anchor: anchor,
+      city_ci: city
+    };
   }
 
-  function congColor(v) {
-    if (v < 0.4) return "#3dd68c";
-    if (v < 0.65) return "#e6c07b";
+  function congClassFromCI(ci, scenarioCi) {
+    const bins =
+      (scenarioCi && scenarioCi.cong_class_bins) || {
+        free: { ci_max: 1.15 },
+        slow: { ci_max: 1.45 },
+        cong: { ci_max: 1.85 },
+        severe: { ci_max: null }
+      };
+    if (ci <= (bins.free.ci_max != null ? bins.free.ci_max : 1.15)) return "free";
+    if (ci <= (bins.slow.ci_max != null ? bins.slow.ci_max : 1.45)) return "slow";
+    if (ci <= (bins.cong.ci_max != null ? bins.cong.ci_max : 1.85)) return "cong";
+    return "severe";
+  }
+
+  function congClassColor(cls) {
+    if (cls === "free") return "#3dd68c";
+    if (cls === "slow") return "#e6c07b";
+    if (cls === "cong") return "#fb923c";
     return "#f07178";
+  }
+
+  function congClassLabel(cls) {
+    return (
+      { free: "畅通", slow: "缓慢", cong: "拥堵", severe: "严重" }[cls] || cls
+    );
+  }
+
+  /** Legacy 0–1 score for biz color / share stats */
+  function wayCongestion(props, cityIndex, weather, tod, extra) {
+    if (extra && (extra.scenarioCi || extra.anchorsDoc)) {
+      const w = wayCI(props, {
+        scenarioCi: extra.scenarioCi,
+        anchorsDoc: extra.anchorsDoc,
+        time_scenario: tod,
+        weather: weather
+      });
+      // map CI ~0.9–2.6 → 0–1
+      return Math.max(0, Math.min(1, (w.ci - 0.9) / 1.7));
+    }
+    const hw = (props && props.highway) || "tertiary";
+    const base = cityIndex != null ? cityIndex : 1.3;
+    const norm = Math.max(0, Math.min(1, (base - 0.9) / 1.7));
+    return Math.max(0, Math.min(1, norm * highwayClassFactor(hw)));
+  }
+
+  function congColor(vOrClass) {
+    if (typeof vOrClass === "string") return congClassColor(vOrClass);
+    const v = vOrClass;
+    if (v < 0.25) return "#3dd68c";
+    if (v < 0.45) return "#e6c07b";
+    if (v < 0.7) return "#fb923c";
+    return "#f07178";
+  }
+
+  function difficultyFromScene(congDoc, scenarioCi, timeScenario, weather, biz) {
+    const ts = normalizeTimeScenario(timeScenario);
+    const w = weather || "clear";
+    const sc = sceneKey(biz || "ride");
+    const cell =
+      congDoc &&
+      congDoc.scopes &&
+      congDoc.scopes.citywide &&
+      congDoc.scopes.citywide[w] &&
+      congDoc.scopes.citywide[w][ts];
+    if (cell) {
+      let d = 1;
+      if (sc === "ride") d = cell.difficulty_ride;
+      else if (sc === "delivery") d = cell.difficulty_delivery;
+      else if (sc === "o2o") d = cell.difficulty_o2o;
+      else d = cell.difficulty_ride || 1;
+      return {
+        congestion_index: cell.congestion_index != null ? cell.congestion_index : lookupCityCI(scenarioCi, ts, w),
+        difficulty: Number(d) || 1,
+        scene: sc
+      };
+    }
+    const ci = lookupCityCI(scenarioCi, ts, w);
+    const coeff = sc === "delivery" ? 0.45 : sc === "o2o" ? 0.2 : 0.35;
+    return {
+      congestion_index: ci,
+      difficulty: 1 + coeff * (ci - 1),
+      scene: sc
+    };
   }
 
   function gradeColor(hw) {
@@ -274,8 +437,17 @@
     return "rgba(" + r + "," + g + "," + b + ",0.45)";
   }
 
-  function roadImpactCopy(cong, gradeLabel, difficulty, pack) {
-    const band = cong < 0.4 ? "畅通" : cong < 0.65 ? "缓行" : "拥堵";
+  function roadImpactCopy(cong, gradeLabel, difficulty, pack, meta) {
+    const band =
+      meta && meta.cong_class
+        ? congClassLabel(meta.cong_class)
+        : cong < 0.25
+          ? "畅通"
+          : cong < 0.45
+            ? "缓慢"
+            : cong < 0.7
+              ? "拥堵"
+              : "严重";
     const packZh =
       pack === "ride"
         ? "出行"
@@ -636,13 +808,21 @@
     FORMULA_O2O: FORMULA_O2O,
     SITING_WEIGHTS: SITING_WEIGHTS,
     SITING_R_M: SITING_R_M,
+    TIME6: TIME6,
     sceneKey: sceneKey,
     applyRow: applyRow,
     indexZoneRows: indexZoneRows,
     actionFor: actionFor,
     topShortage: topShortage,
     difficultyBundle: difficultyBundle,
+    difficultyFromScene: difficultyFromScene,
+    normalizeTimeScenario: normalizeTimeScenario,
+    lookupCityCI: lookupCityCI,
+    wayCI: wayCI,
     wayCongestion: wayCongestion,
+    congClassFromCI: congClassFromCI,
+    congClassColor: congClassColor,
+    congClassLabel: congClassLabel,
     congColor: congColor,
     gradeColor: gradeColor,
     gradeWeight: gradeWeight,
@@ -651,6 +831,7 @@
     roadImpactCopy: roadImpactCopy,
     lodFromZoom: lodFromZoom,
     roadClassVisible: roadClassVisible,
+    matchAnchor: matchAnchor,
     etaRadiusM: etaRadiusM,
     storeCoverageM: storeCoverageM,
     scoreSitingCandidates: scoreSitingCandidates,

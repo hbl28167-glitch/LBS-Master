@@ -1,67 +1,70 @@
-# HANDOFF WS-D · 05.1 业务地图�?
-- 仓：`C:\Users\hongbol\Documents\LBS-Master`（可换机�?- branch：`master`
-- commit：见 `git log -1`（`feat(ui): map-first shell with road narrative per PRD 05.1`�?- 依赖：B2 路网 QC PASS · B zones · C zone metrics / entities / congestion_coeff
-- 验收真理�?*PRD 05.1** + `docs/acceptance-main-path.md`
+# HANDOFF WS-D · PRD 05.2 呈现攻坚
+
+- 仓：`C:\Users\hongbol\Documents\LBS-Master`
+- branch：`master`
+- commit：见 `git log -1`（`feat(ui): 05.2 scenario dock road-CI trend presentation`）
+- 依赖：A contracts · B zones/static CI · C site metrics · B2 roads QC
+- 验收：`docs/acceptance-main-path.md` · 旅程 A
 
 ## How to run
 
 ```bash
-cd <repo-root>
 npm run copy:public-data
-# 可�?Key
-copy public\config.local.example.js public\config.local.js
 npm run serve
-# http://localhost:4173  �?Ctrl+F5
+# http://localhost:4173  → Ctrl+F5
 ```
 
-�?Key：fallback 底图 + 横幅，不崩溃�?
-## 05.1 已实�?
+可选：`public/config.local.js` 填 `amapKey`（仅本地）。
+
+## 05.2 本波交付
+
 | 能力 | 实现 |
 |------|------|
-| IA | 顶栏六包可点 · 情景�?· **叙事�?* · 左图右栏（业务列表\|路段分析�?|
-| 默认总览 | 底图 + 水系 + 路网拥堵 + 区面类型�?+ **面热�?*�?*�?1km 糊格** |
-| 路网三模�?| `cong` / `grade` / `biz`；整�?way 一色；点击→路段分�?业务文案 |
-| 热力三模�?| `poly` 默认 / `grid`（lazy load fine�? `kde` |
-| LOD | zoom→city\|district\|block；滤路等级与点密�?|
-| 出行�?| zone demand×supply÷difficulty · TopN · 导出 |
-| 到店 | 门店�?+ **单店聚焦**（覆盖圈�?|
-| 履约/能源/治理 | 最小可讲态（非灰死） |
-| 情景 A/B | clear/rain × 路色 + difficulty_coeff 叙事�?|
+| 两卡情景 | `#sel-time`（6 档）× `#sel-weather` → `AppContext.analysis_scene`；全局唯一 |
+| 镜头分离 | 陆家嘴/虹桥/临港 = **仅 flyTo**，不写 scene |
+| 叙事条 | 选中对象 + scene 芯片 + city CI / 难度（非写死「虹桥履约」） |
+| 图层坞 | 左上同一组：底图/水/路/区/热/站店/圈/图例 + 路网模式 + 热力形态 |
+| 缩放避让 | Leaflet zoom **bottomleft**；坞 topleft；图例 bottomright |
+| 路况 CI | `scenario_ci` × highway class × `typical_road_anchors`（早峰）→ 四档色 |
+| 24h 趋势 | 右栏 SVG，读 `ci_series_24h`；竖线=当前档；点击切时间 |
+| 区面 | 消费 B `zones_shanghai.geojson`（road_convex_hull 为主） |
+| 能源 site | `entities_charger.sites` 优先；功率字段可在详情扩展（E） |
 
-## Artifacts
+## 数据路径（public/data ← copy）
 
-| path | note |
+| 文件 | 用途 |
 |------|------|
-| `public/index.html` | 05.1 �?|
-| `public/css/app.css` | 对齐 demo 手感 |
-| `public/js/app-context.js` | 05.1 AppContext 字段 |
-| `public/js/metrics.js` | zone gap + 路况合成 + 文案 |
-| `public/js/map-app.js` | �?�?�?�?�?LOD |
-| `public/js/data-loader.js` | core + lazy fine heat |
-| `public/js/main.js` | 编排 |
-| `docs/acceptance-main-path.md` | 勾选清�?|
+| `time_scenario.json` | 6 档标签 |
+| `scenario_ci.json` | city_CI / weather_f / 四档 bin / v0 |
+| `ci_series_24h.json` | 趋势曲线 |
+| `typical_road_anchors.json` | 早峰廊道 name 匹配 |
+| `congestion_coeff.json` | difficulty 业务系数 |
+| `zones_shanghai.geojson` | 贴路区面 |
+| `roads_gcj.geojson` | 路网 |
+| `metrics_*.json` | zone 指标（time_scenario 6 档） |
+| `entities_charger.json` | site + 功率 |
 
-## Runtime
+## opengeos 借用边界
 
-```text
-demand = demand_base * weather * node
-supply = supply_base * weather * node / difficulty_(scene)
-gap    = demand - supply
-way_cong = f(city congestion_index, highway, weather, tod, name hints)
-```
+| 可借鉴 | 禁止 |
+|--------|------|
+| 图层分组、图例层次、控件分区（坞/图例/缩放分离） | 换 MapLibre 整栈、leafmap/GEE/SAM、运行时外部 GIS |
 
-数据：`metrics_ride` �?**zone-primary**；实�?小李门店/充电�?
+## 已知限制
+
+1. 路况为 **Synthetic CI 着色**，非真路况 API。  
+2. 等时圈/能源 KPI 深看板 → **WS-E**。  
+3. 区面 5 个 `irregular_fallback`：边缘稀疏路网；hull 占优则目视应非圆泡阵。  
+4. 细格热力仍 lazy load 大文件。  
+5. 无 Key 时高德瓦片可能不稳，不默认切第三方底图（05.2）。
+
 ## Downstream
 
-- E：到�?履约/能源/治理加深  
-- F：demo-script �?05.1 叙事重写  
+- **WS-E**：在 `analysis_scene` + 路网 CI + 图层总线 上做能源看板与 5/10/15 等时圈  
+- **WS-F**：按旅程 A/B 写 demo-script  
 
-## Out of scope
+## Out of scope（honored）
 
-- 不重�?OSM / 不编造区�? 
-- 不改 processed 生成逻辑（除非契�?bug�?
-## Known limits
-
-1. 细格 `metrics_heat_fine` �?50MB，依�?copy；缺则回退 poly�? 
-2. 5.6 万路段按 LOD 过滤；city 级优先高等级�? 
-3. �?Key �?fallback 瓦片�?GCJ 路网可能有视觉偏差�?
+- 未重下 OSM / 未重算 zones·synthetic  
+- 未改 zone_id / grid_id  
+- 未做完整等时圈引擎  

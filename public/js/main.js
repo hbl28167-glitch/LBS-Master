@@ -61,16 +61,54 @@
     return AppContext.PACK_SCENE[pack] || "ride";
   }
 
+  function analysisOf(ctx) {
+    const as = (ctx && ctx.analysis_scene) || {};
+    return {
+      time_scenario: LBSMetrics.normalizeTimeScenario(
+        as.time_scenario || ctx.time_of_day || "wd_pm_peak"
+      ),
+      weather: as.weather || ctx.weather || "clear"
+    };
+  }
+
   function computeOpts(ctx) {
+    const a = analysisOf(ctx);
     return {
       weatherDoc: data.weather,
       calendarDoc: data.calendar,
       congDoc: data.congestion,
-      weather: ctx.weather,
+      weather: a.weather,
       nodeKey: ctx.season_or_node,
-      time_of_day: ctx.time_of_day,
+      time_of_day: a.time_scenario,
       scene: sceneForPack(ctx.active_pack)
     };
+  }
+
+  function sceneBundle(ctx) {
+    const a = analysisOf(ctx);
+    return LBSMetrics.difficultyFromScene(
+      data && data.congestion,
+      data && data.scenario_ci,
+      a.time_scenario,
+      a.weather,
+      sceneForPack(ctx.active_pack)
+    );
+  }
+
+  function timeLabel(ts) {
+    const map = {
+      wd_night: "工作日·夜间",
+      wd_am_peak: "工作日·早高峰",
+      wd_day_offpeak: "工作日·平峰",
+      wd_pm_peak: "工作日·晚高峰",
+      we_day: "周末·日间",
+      we_night: "周末·夜间"
+    };
+    return map[ts] || ts;
+  }
+
+  function weatherLabel(w) {
+    return w === "rain" ? "雨" : w === "extreme" ? "极端" : "晴";
   }
 
   function computeZoneList(ctx) {
@@ -118,92 +156,80 @@
     // avoid double notify loop: set already notifies; callers should not re-enter
   }
 
-  function buildNarrative(ctx, diff, share) {
-    const pack = PACK_LABEL[ctx.active_pack] || ctx.active_pack;
-    const w = ctx.weather === "rain" ? "雨天" : "晴天";
-    const tod =
-      ctx.time_of_day === "wd_am_peak"
-        ? "早高峰"
-        : ctx.time_of_day === "we_aft"
-          ? "周末下午"
-          : "晚高峰";
+  function buildNarrative(ctx, diff, share, cityCi) {
+    const a = analysisOf(ctx);
+    const chip =
+      timeLabel(a.time_scenario) +
+      " · " +
+      weatherLabel(a.weather) +
+      " · CI≈" +
+      (cityCi != null ? Number(cityCi).toFixed(2) : "—");
     if (ctx.selected_road_id) {
+      return "已选路段 · " + chip + " · 难度×" + diff.toFixed(2);
+    }
+    if (ctx.selected_zone_id) {
+      const z = zoneById.get(ctx.selected_zone_id);
       return (
-        pack +
-        " · 已选路段：路况与难度系数联动（" +
-        w +
-        tod +
-        "，×" +
-        diff.toFixed(2) +
-        "）"
+        "区「" +
+        ((z && z.name) || ctx.selected_zone_id) +
+        "」· " +
+        chip
+      );
+    }
+    if (ctx.selected_site_id || ctx.storeFocusId) {
+      return (
+        "站点 " +
+        (ctx.selected_site_id || ctx.storeFocusId) +
+        " · " +
+        chip
       );
     }
     if (ctx.active_pack === "ride") {
-      return (
-        "出行：" +
-        w +
-        tod +
-        "需求×运力同屏；拥堵抬高匹配难度 ×" +
-        diff.toFixed(2) +
-        "（拥堵路约 " +
-        Math.round(share * 100) +
-        "%）"
-      );
+      return "出行缺口同屏 · " + chip + " · 难度×" + diff.toFixed(2);
     }
     if (ctx.active_pack === "fulfillment") {
-      return (
-        "履约：门店+需求热力+路网；拥堵压缩时效圈（难度 ×" +
-        diff.toFixed(2) +
-        "）"
-      );
+      return "履约时效受路阻抗 · " + chip;
     }
     if (ctx.active_pack === "o2o") {
-      if (ctx.storeFocusMode) {
-        return "到店·单店聚焦：仅该店+覆盖/围栏/客流；点退出返回 LOD 浏览";
-      }
-      return "到店：商圈面热力+门店+路网；点店进入单店聚焦，避免千店同亮";
+      return ctx.storeFocusMode
+        ? "到店单店聚焦 · " + chip
+        : "到店网络浏览 · " + chip;
     }
     if (ctx.active_pack === "energy") {
       return (
-        "能源：小李充电站网（" +
+        "能源站网 " +
         chargerCount() +
-        "）+ 区缺口 + 路网廊道；缺口可发起选址 S5"
+        " 站 · " +
+        chip +
+        "（深看板/等时圈 → E）"
       );
     }
     if (ctx.active_pack === "governance") {
-      return (
-        "治理：图例「数据质量」与经营色分色；不处理终端 GPS 漂移 · " +
-        qualityIssues.length +
-        " 条示意问题"
-      );
+      return "治理质量点 · " + chip + " · 不处理终端 GPS";
     }
-    return (
-      "总览：底图 + 路网 + 类型区面 + 面热力。点路段读业务难度（" +
-      w +
-      tod +
-      "）"
-    );
+    return "总览定语境 · " + chip + " · 压力上界看晚峰×雨";
   }
 
   function paintStory(ctx) {
     const t = $("story-t");
     const d = $("story-d");
     const sm1 = $("sm-obj");
-    const sm2 = $("sm-cong");
+    const sm2 = $("sm-ci");
     const sm3 = $("sm-diff");
     const cong = ctx.congestion || {};
+    const a = analysisOf(ctx);
     if (t) {
       t.textContent =
         (PACK_LABEL[ctx.active_pack] || "") +
-        " · 情景" +
-        ctx.scenario +
         " · " +
-        (ctx.weather === "rain" ? "雨" : "晴");
+        timeLabel(a.time_scenario) +
+        " · " +
+        weatherLabel(a.weather);
     }
     if (d) {
       d.textContent =
         cong.narrative ||
-        "默认看见路网（拥堵/等级/业务难度）+ 区面 + 面热力。点一条路看右侧「路段分析」。";
+        "两卡情景驱动路网色与难度；镜头仅 flyTo。";
     }
     if (sm1) {
       sm1.textContent =
@@ -211,16 +237,13 @@
           ? "路段 " + ctx.selected_road_id
           : ctx.selected_zone_id
             ? ctx.selected_zone_id.split(":").slice(-1)[0]
-            : ctx.storeFocusId
-              ? ctx.storeFocusId
+            : ctx.selected_site_id || ctx.storeFocusId
+              ? ctx.selected_site_id || ctx.storeFocusId
               : "—";
     }
     if (sm2) {
-      const sh =
-        cong.share_blocked != null
-          ? Math.round(cong.share_blocked * 100) + "%"
-          : "—";
-      sm2.textContent = sh;
+      sm2.textContent =
+        cong.city_ci != null ? Number(cong.city_ci).toFixed(2) : "—";
     }
     if (sm3) {
       sm3.textContent =
@@ -229,17 +252,30 @@
           ? Number(cong.difficulty_coeff).toFixed(2)
           : "1.00");
     }
+    if ($("scene-chip")) {
+      $("scene-chip").textContent =
+        timeLabel(a.time_scenario) +
+        " · " +
+        weatherLabel(a.weather) +
+        " · CI≈" +
+        (cong.city_ci != null ? Number(cong.city_ci).toFixed(2) : "—");
+    }
   }
 
   function storeList() {
     return (data && data.stores && (data.stores.entities || data.stores)) || [];
   }
   function chargerList() {
-    return (
-      (data && data.chargers && (data.chargers.entities || data.chargers)) || []
-    );
+    const c = data && data.chargers;
+    if (!c) return [];
+    // 05.2: prefer site unit
+    if (Array.isArray(c.sites) && c.sites.length) return c.sites;
+    if (Array.isArray(c.entities)) return c.entities;
+    return Array.isArray(c) ? c : [];
   }
   function chargerCount() {
+    const c = data && data.chargers;
+    if (c && c.site_count != null) return c.site_count;
     return chargerList().length;
   }
   function storeCount() {
@@ -254,8 +290,9 @@
     };
     const pack = ctx.active_pack;
 
-    mapApp.showLayer("water", true);
-    mapApp.showLayer("zones", has("zones") || pack === "o2o" || pack === "energy");
+    mapApp.showLayer("basemap", has("basemap"));
+    mapApp.showLayer("water", has("water"));
+    mapApp.showLayer("zones", has("zones"));
     mapApp.showLayer(
       "heat",
       has("heat") || has("heat_grid") || has("heat_kde")
@@ -263,13 +300,9 @@
     mapApp.showLayer("roads", has("roads") || has("road_cong"));
     mapApp.showLayer(
       "points",
-      has("stores") ||
-        has("chargers") ||
-        has("quality") ||
-        ctx.storeFocusMode ||
-        pack === "governance"
+      has("stores") || has("chargers") || has("quality")
     );
-    mapApp.showLayer("overlay", true);
+    mapApp.showLayer("overlay", has("overlay") || has("fence"));
 
     if (ctx.selected_zone_id) mapApp.setZoneSelection(ctx.selected_zone_id);
 
@@ -330,12 +363,8 @@
     }
 
     // roads — fulfillment/ride/energy default on with cong
-    const bundle = LBSMetrics.difficultyBundle(
-      data.congestion,
-      ctx.weather,
-      ctx.time_of_day,
-      sceneForPack(pack)
-    );
+    const a = analysisOf(ctx);
+    const bundle = sceneBundle(ctx);
     const roadsOn =
       has("roads") ||
       has("road_cong") ||
@@ -345,9 +374,12 @@
       mode: ctx.roadDisplayMode || "cong",
       lod: ctx.lodLevel || "district",
       cityIndex: bundle.congestion_index,
-      weather: ctx.weather,
-      tod: ctx.time_of_day,
+      weather: a.weather,
+      tod: a.time_scenario,
+      time_scenario: a.time_scenario,
       difficulty: bundle.difficulty,
+      scenarioCi: data.scenario_ci,
+      anchorsDoc: data.typical_road_anchors,
       show: roadsOn
     });
     if (ctx.selected_road_id) mapApp.highlightRoad(ctx.selected_road_id);
@@ -908,14 +940,7 @@
       if (name) name.textContent = d.name;
       if (grade) grade.textContent = d.grade;
       if (cong) cong.textContent = d.congLabel + "（整段一色）";
-      if (rctx)
-        rctx.textContent =
-          "情景" +
-          ctx.scenario +
-          " · " +
-          ctx.weather +
-          " · " +
-          ctx.time_of_day;
+      if (rctx) rctx.textContent = d.scene || "—";
       if (impact) {
         impact.className =
           "impact " + (d.cong >= 0.65 ? "bad" : d.cong >= 0.4 ? "warn" : "");
@@ -1116,12 +1141,17 @@
   }
 
   function syncChrome(ctx) {
+    const a = analysisOf(ctx);
     document.querySelectorAll(".nav button[data-pack]").forEach(function (btn) {
       btn.classList.toggle("active", btn.getAttribute("data-pack") === ctx.active_pack);
     });
-    if ($("sel-tod")) $("sel-tod").value = ctx.time_of_day;
+    if ($("sel-time")) $("sel-time").value = a.time_scenario;
+    if ($("sel-weather")) $("sel-weather").value = a.weather;
     if ($("sel-node")) $("sel-node").value = ctx.season_or_node;
-    if ($("sel-scenario")) $("sel-scenario").value = ctx.scenario;
+    if ($("trend-wd"))
+      $("trend-wd").classList.toggle("on", (ctx.trend_series || "weekday") === "weekday");
+    if ($("trend-we"))
+      $("trend-we").classList.toggle("on", ctx.trend_series === "weekend");
     document.querySelectorAll("[data-rm]").forEach(function (b) {
       b.classList.toggle("on", b.getAttribute("data-rm") === ctx.roadDisplayMode);
     });
@@ -1129,20 +1159,24 @@
       b.classList.toggle("on", b.getAttribute("data-heat") === ctx.heatRenderMode);
     });
     const ls = ctx.layer_set || [];
+    if ($("ly-basemap")) $("ly-basemap").checked = ls.indexOf("basemap") >= 0;
+    if ($("ly-water")) $("ly-water").checked = ls.indexOf("water") >= 0;
     if ($("ly-road"))
       $("ly-road").checked =
         ls.indexOf("roads") >= 0 || ls.indexOf("road_cong") >= 0;
     if ($("ly-zone")) $("ly-zone").checked = ls.indexOf("zones") >= 0;
     if ($("ly-heat")) $("ly-heat").checked = ls.indexOf("heat") >= 0;
+    if ($("ly-overlay"))
+      $("ly-overlay").checked =
+        ls.indexOf("overlay") >= 0 || ls.indexOf("fence") >= 0;
+    if ($("legend-float") && $("ly-legend")) {
+      $("legend-float").classList.toggle("hidden", !$("ly-legend").checked);
+    }
     if ($("ly-poi")) {
       $("ly-poi").checked =
         ls.indexOf("stores") >= 0 ||
         ls.indexOf("chargers") >= 0 ||
-        ls.indexOf("quality") >= 0 ||
-        ctx.active_pack === "o2o" ||
-        ctx.active_pack === "fulfillment" ||
-        ctx.active_pack === "energy" ||
-        ctx.active_pack === "governance";
+        ls.indexOf("quality") >= 0;
       const lab = $("ly-poi").parentElement;
       if (lab) {
         const nodes = lab.childNodes;
@@ -1166,9 +1200,12 @@
     if ($("panel-road"))
       $("panel-road").classList.toggle("hidden", ctx.side_panel !== "road");
     if ($("scene-badge")) {
+      const a2 = analysisOf(ctx);
       $("scene-badge").innerHTML =
-        "scene <code>" +
-        ctx.active_scene +
+        "<code>" +
+        a2.time_scenario +
+        "×" +
+        a2.weather +
         "</code> · " +
         ctx.active_pack;
     }
@@ -1179,8 +1216,7 @@
         lt.textContent = "图例 · 数据质量（≠经营色）";
         lb.innerHTML =
           "<span><i class='sw' style='background:#a855f7'></i>P0 主数据</span>" +
-          "<span><i class='sw' style='background:#f59e0b'></i>P1 入口/路网</span>" +
-          "<span style='flex-basis:100%;font-size:10px;color:#c4b5fd'>不处理终端 GPS 漂移</span>";
+          "<span><i class='sw' style='background:#f59e0b'></i>P1 入口/路网</span>";
       } else if (ctx.roadDisplayMode === "grade") {
         lt.textContent = "图例 · 道路等级";
         lb.innerHTML =
@@ -1195,33 +1231,135 @@
           "<span><i class='sw' style='background:#e6c07b'></i>承压</span>" +
           "<span><i class='sw' style='background:#f07178'></i>高难度</span>";
       } else {
-        lt.textContent = "图例 · 拥堵（整段 way）";
+        lt.textContent = "图例 · 路况四档（CI）";
         lb.innerHTML =
           "<span><i class='sw' style='background:#3dd68c'></i>畅通</span>" +
-          "<span><i class='sw' style='background:#e6c07b'></i>缓行</span>" +
-          "<span><i class='sw' style='background:#f07178'></i>拥堵</span>";
+          "<span><i class='sw' style='background:#e6c07b'></i>缓慢</span>" +
+          "<span><i class='sw' style='background:#fb923c'></i>拥堵</span>" +
+          "<span><i class='sw' style='background:#f07178'></i>严重</span>";
       }
     }
+  }
+
+  function paintTrend(ctx) {
+    const svg = $("trend-svg");
+    if (!svg || !data || !data.ci_series_24h) return;
+    const seriesKey =
+      ctx.trend_series === "weekend" ? "weekend" : "weekday";
+    const series = data.ci_series_24h[seriesKey];
+    if (!series || !series.city_CI) return;
+    const vals = series.city_CI.slice();
+    const a = analysisOf(ctx);
+    const wf =
+      (data.scenario_ci &&
+        data.scenario_ci.weather_f &&
+        data.scenario_ci.weather_f[a.weather]) ||
+      1;
+    const scaled = vals.map(function (v) {
+      return v * wf;
+    });
+    const w = 280;
+    const h = 72;
+    const pad = 8;
+    const minV = 0.8;
+    const maxV = 2.4;
+    const n = scaled.length;
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const x = pad + (i / (n - 1)) * (w - pad * 2);
+      const t = (scaled[i] - minV) / (maxV - minV);
+      const y = h - pad - Math.max(0, Math.min(1, t)) * (h - pad * 2);
+      pts.push([x, y]);
+    }
+    let dLine = "";
+    let dArea = "";
+    pts.forEach(function (p, i) {
+      dLine += (i ? "L" : "M") + p[0].toFixed(1) + "," + p[1].toFixed(1) + " ";
+    });
+    dArea =
+      dLine +
+      "L" +
+      pts[n - 1][0].toFixed(1) +
+      "," +
+      (h - pad) +
+      " L" +
+      pts[0][0].toFixed(1) +
+      "," +
+      (h - pad) +
+      " Z";
+    // cursor: first hour mapped to current time_scenario
+    let curH = 18;
+    const mapH = series.time_scenario_by_hour || [];
+    for (let i = 0; i < mapH.length; i++) {
+      if (mapH[i] === a.time_scenario) {
+        curH = i;
+        break;
+      }
+    }
+    const cx = pad + (curH / (n - 1)) * (w - pad * 2);
+    const cy = pts[curH] ? pts[curH][1] : h / 2;
+    svg.innerHTML =
+      '<path class="trend-area" d="' +
+      dArea +
+      '"/>' +
+      '<path class="trend-line" d="' +
+      dLine +
+      '"/>' +
+      '<line class="trend-cursor" x1="' +
+      cx.toFixed(1) +
+      '" y1="' +
+      pad +
+      '" x2="' +
+      cx.toFixed(1) +
+      '" y2="' +
+      (h - pad) +
+      '"/>' +
+      '<circle class="trend-dot" cx="' +
+      cx.toFixed(1) +
+      '" cy="' +
+      cy.toFixed(1) +
+      '" r="3.5"/>' +
+      '<text x="8" y="10">CI</text>' +
+      '<text x="250" y="70">24h</text>';
+    if ($("trend-foot")) {
+      $("trend-foot").textContent =
+        timeLabel(a.time_scenario) +
+        " · " +
+        weatherLabel(a.weather) +
+        " · 竖线=当前档 · 点击曲线切换时间";
+    }
+    svg.onclick = function (ev) {
+      const rect = svg.getBoundingClientRect();
+      const x = ((ev.clientX - rect.left) / rect.width) * w;
+      const idx = Math.round(((x - pad) / (w - pad * 2)) * (n - 1));
+      const i = Math.max(0, Math.min(n - 1, idx));
+      const ts =
+        (mapH[i] && LBSMetrics.normalizeTimeScenario(mapH[i])) ||
+        a.time_scenario;
+      AppContext.setAnalysisScene(ts, a.weather);
+    };
   }
 
   let suppressCongWrite = false;
 
   function onState(ctx) {
-    if (!suppressCongWrite) {
-      // refresh derived congestion without infinite loop
-      const sc = sceneForPack(ctx.active_pack);
-      const bundle = LBSMetrics.difficultyBundle(
-        data && data.congestion,
-        ctx.weather,
-        ctx.time_of_day,
-        sc
+    if (!suppressCongWrite && data) {
+      const bundle = sceneBundle(ctx);
+      const cityCi = bundle.congestion_index;
+      const share = Math.min(
+        0.95,
+        Math.max(0.08, (cityCi - 0.9) / 1.8)
       );
-      const share = Math.min(0.95, Math.max(0.05, (bundle.congestion_index || 0.5) * 0.9));
-      const narrative = buildNarrative(ctx, bundle.difficulty, share);
+      const narrative = buildNarrative(
+        ctx,
+        bundle.difficulty,
+        share,
+        cityCi
+      );
       const prev = ctx.congestion || {};
       if (
         prev.difficulty_coeff !== bundle.difficulty ||
-        prev.share_blocked !== share ||
+        prev.city_ci !== cityCi ||
         prev.narrative !== narrative
       ) {
         suppressCongWrite = true;
@@ -1229,15 +1367,17 @@
           congestion: {
             share_blocked: share,
             difficulty_coeff: bundle.difficulty,
-            narrative: narrative
+            narrative: narrative,
+            city_ci: cityCi
           }
         });
         suppressCongWrite = false;
-        return; // will re-enter
+        return;
       }
     }
     syncChrome(ctx);
     paintStory(ctx);
+    paintTrend(ctx);
     paintMap(ctx);
     paintList(ctx);
     paintRoadPanel(ctx);
@@ -1251,17 +1391,16 @@
         setStatus("已切换 · " + (PACK_LABEL[btn.getAttribute("data-pack")] || ""));
       });
     });
-    if ($("sel-tod"))
-      $("sel-tod").onchange = function () {
-        AppContext.set({ time_of_day: $("sel-tod").value });
-      };
+    function applyTwoCards() {
+      const ts = ($("sel-time") && $("sel-time").value) || "wd_pm_peak";
+      const w = ($("sel-weather") && $("sel-weather").value) || "clear";
+      AppContext.setAnalysisScene(ts, w);
+    }
+    if ($("sel-time")) $("sel-time").onchange = applyTwoCards;
+    if ($("sel-weather")) $("sel-weather").onchange = applyTwoCards;
     if ($("sel-node"))
       $("sel-node").onchange = function () {
         AppContext.set({ season_or_node: $("sel-node").value });
-      };
-    if ($("sel-scenario"))
-      $("sel-scenario").onchange = function () {
-        AppContext.applyScenario($("sel-scenario").value);
       };
     document.querySelectorAll("[data-rm]").forEach(function (b) {
       b.addEventListener("click", function () {
@@ -1273,25 +1412,49 @@
         AppContext.set({ heatRenderMode: b.getAttribute("data-heat") });
       });
     });
+    if ($("trend-wd"))
+      $("trend-wd").onclick = function () {
+        AppContext.set({ trend_series: "weekday" });
+      };
+    if ($("trend-we"))
+      $("trend-we").onclick = function () {
+        AppContext.set({ trend_series: "weekend" });
+      };
     function layerPatch() {
       const ctx = AppContext.get();
-      const set = ["basemap"];
+      const set = [];
+      if ($("ly-basemap") && $("ly-basemap").checked) set.push("basemap");
+      if ($("ly-water") && $("ly-water").checked) set.push("water");
       if ($("ly-road") && $("ly-road").checked) {
         set.push("roads");
         set.push("road_cong");
       }
-      set.push("water");
       if ($("ly-zone") && $("ly-zone").checked) set.push("zones");
       if ($("ly-heat") && $("ly-heat").checked) set.push("heat");
+      if ($("ly-overlay") && $("ly-overlay").checked) {
+        set.push("overlay");
+        if (ctx.active_pack === "o2o") set.push("fence");
+      }
       if ($("ly-poi") && $("ly-poi").checked) {
         if (ctx.active_pack === "energy") set.push("chargers");
         else if (ctx.active_pack === "governance") set.push("quality");
         else set.push("stores");
       }
-      if (ctx.active_pack === "o2o") set.push("fence");
       AppContext.set({ layer_set: set });
+      if ($("legend-float") && $("ly-legend")) {
+        $("legend-float").classList.toggle("hidden", !$("ly-legend").checked);
+      }
     }
-    ["ly-road", "ly-zone", "ly-heat", "ly-poi"].forEach(function (id) {
+    [
+      "ly-basemap",
+      "ly-water",
+      "ly-road",
+      "ly-zone",
+      "ly-heat",
+      "ly-poi",
+      "ly-overlay",
+      "ly-legend"
+    ].forEach(function (id) {
       if ($(id)) $(id).onchange = layerPatch;
     });
     document.querySelectorAll(".side-tabs button").forEach(function (b) {
@@ -1300,31 +1463,21 @@
       });
     });
     if ($("btn-export")) $("btn-export").onclick = exportSnapshot;
-    if ($("btn-story-river"))
-      $("btn-story-river").onclick = function () {
-        AppContext.applyScenario("A");
-        AppContext.set({
-          time_of_day: "wd_pm_peak",
-          roadDisplayMode: "cong",
-          active_pack: "overview"
-        });
-        AppContext.switchPack("overview");
+    // 镜头 = 仅 flyTo，禁止改 analysis_scene
+    if ($("btn-lens-lz"))
+      $("btn-lens-lz").onclick = function () {
         mapApp.focusLatLng(31.239, 121.495, 13);
-        setStatus("叙事镜头 · 晚高峰过江");
+        setStatus("镜头 · 陆家嘴（未改 analysis_scene）");
       };
-    if ($("btn-story-rain"))
-      $("btn-story-rain").onclick = function () {
-        AppContext.switchPack("ride");
-        AppContext.applyScenario("B");
-        AppContext.set({ time_of_day: "wd_pm_peak", roadDisplayMode: "cong" });
-        setStatus("叙事镜头 · 雨天出行");
-      };
-    if ($("btn-story-hub"))
-      $("btn-story-hub").onclick = function () {
-        AppContext.switchPack("fulfillment");
-        AppContext.applyScenario("A");
+    if ($("btn-lens-hq"))
+      $("btn-lens-hq").onclick = function () {
         mapApp.focusLatLng(31.194, 121.32, 13);
-        setStatus("叙事镜头 · 虹桥脉冲");
+        setStatus("镜头 · 虹桥（未改 analysis_scene）");
+      };
+    if ($("btn-lens-lg"))
+      $("btn-lens-lg").onclick = function () {
+        mapApp.focusLatLng(30.907, 121.933, 12);
+        setStatus("镜头 · 临港（未改 analysis_scene）");
       };
   }
 
@@ -1402,9 +1555,9 @@
       amapKey: amapKey,
       onBasemapFallback: function (reason) {
         showBanner(
-          "高德底图瓦片失败已切换 fallback（" +
+          "高德瓦片加载异常（" +
             reason +
-            "）。请在 public/config.local.js 填写有效 amapKey 后 Ctrl+F5。",
+            "）。请检查网络或在 public/config.local.js 填写 amapKey 后 Ctrl+F5。可在左侧关闭「高德底图」仅看业务层。",
           true
         );
       },
@@ -1414,19 +1567,18 @@
           AppContext.set({ lodLevel: lod });
         } else {
           const ctx = AppContext.get();
-          const bundle = LBSMetrics.difficultyBundle(
-            data && data.congestion,
-            ctx.weather,
-            ctx.time_of_day,
-            sceneForPack(ctx.active_pack)
-          );
+          const a = analysisOf(ctx);
+          const bundle = sceneBundle(ctx);
           mapApp.rebuildRoads({
             mode: ctx.roadDisplayMode,
             lod: lod,
             cityIndex: bundle.congestion_index,
-            weather: ctx.weather,
-            tod: ctx.time_of_day,
+            weather: a.weather,
+            tod: a.time_scenario,
+            time_scenario: a.time_scenario,
             difficulty: bundle.difficulty,
+            scenarioCi: data && data.scenario_ci,
+            anchorsDoc: data && data.typical_road_anchors,
             show: true
           });
         }
@@ -1480,30 +1632,46 @@
     mapApp.map.setView([31.23, 121.48], 12);
 
     mapApp.setHandlers({
-      onRoadClick: function (id, props, cong, _f, ll) {
+      onRoadClick: function (id, props, cong, _f, ll, meta) {
         const ctx = AppContext.get();
-        const bundle = LBSMetrics.difficultyBundle(
-          data.congestion,
-          ctx.weather,
-          ctx.time_of_day,
-          sceneForPack(ctx.active_pack)
-        );
+        const a = analysisOf(ctx);
+        const bundle = sceneBundle(ctx);
         const hw = props.highway || "";
-        const gradeLabel = hw + (props.ref ? " / " + props.ref : "");
-        const band = cong < 0.4 ? "畅通" : cong < 0.65 ? "缓行" : "拥堵";
+        const m =
+          meta ||
+          LBSMetrics.wayCI(props, {
+            scenarioCi: data.scenario_ci,
+            anchorsDoc: data.typical_road_anchors,
+            time_scenario: a.time_scenario,
+            weather: a.weather
+          });
+        const gradeLabel =
+          hw +
+          (props.ref ? " / " + props.ref : "") +
+          (m.anchor ? " · 锚点「" + m.anchor.label_zh + "」" : "");
+        const band = LBSMetrics.congClassLabel(m.cong_class);
         const names = nearestZones(ll || [31.23, 121.48], 3);
         window.__lastRoadDetail = {
           name: props.name || props.ref || "osm:" + id,
           grade: gradeLabel,
           cong: cong,
-          congLabel: band + " · index " + cong.toFixed(2),
+          congLabel:
+            band +
+            " · CI " +
+            m.ci.toFixed(2) +
+            " · ~" +
+            m.speed_kmh.toFixed(0) +
+            " km/h（合成）",
           impact: LBSMetrics.roadImpactCopy(
             cong,
             gradeLabel,
             bundle.difficulty,
-            ctx.active_pack
+            ctx.active_pack,
+            m
           ),
-          zones: names.join("、") || "—"
+          zones: names.join("、") || "—",
+          scene:
+            timeLabel(a.time_scenario) + " · " + weatherLabel(a.weather)
         };
         AppContext.set({
           selected_road_id: id,
@@ -1555,9 +1723,31 @@
     });
     qualityIssues = LBSMetrics.mockQualityIssues(storeList(), chargerList());
 
-    AppContext.applyScenario("A");
+    AppContext.setAnalysisScene("wd_pm_peak", "clear");
     AppContext.switchPack("overview");
     onState(AppContext.get());
+
+    // zone geometry debt banner (05.2: should be road-hugged polygons)
+    const gm =
+      (data.zonesMeta && data.zonesMeta.by_geometry_method) || {};
+    const hull = gm.road_convex_hull || 0;
+    const fb = gm.irregular_fallback || 0;
+    if (fb > hull * 0.25) {
+      showBanner(
+        "区面几何债：fallback 过多（hull=" +
+          hull +
+          " fallback=" +
+          fb +
+          "），部分仍可能像圆泡。数据见 HANDOFF-B-zones。",
+        true
+      );
+    }
+    if (!data.scenario_ci || !data.ci_series_24h) {
+      showBanner(
+        "缺少 scenario_ci / ci_series_24h：路色与趋势用默认表。请 npm run copy:public-data。",
+        true
+      );
+    }
 
     if ($("synth-note")) {
       $("synth-note").textContent =
@@ -1569,19 +1759,17 @@
             " · 无雇主站名"
           : "Synthetic";
     }
+    const sitesN =
+      (data.chargers && (data.chargers.site_count || data.chargers.count)) ||
+      chargerCount();
     setStatus(
       "就绪 · zones " +
         zoneById.size +
-        " · 门店 " +
-        storeCount() +
-        " · 充电 " +
-        chargerCount() +
-        " · 质量问题 " +
-        qualityIssues.length +
+        " · 站 " +
+        sitesN +
         " · roads " +
         ((data.roads && data.roads.features && data.roads.features.length) || 0) +
-        " · " +
-        (amapKey ? "高德底图" : "fallback 底图")
+        " · 05.2 两卡情景"
     );
   }
 

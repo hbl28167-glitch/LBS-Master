@@ -12,7 +12,7 @@
     <div id="banner-key" class="banner-key" role="status"></div>
 
     <header class="topbar">
-      <h1 class="brand">LBS-Master <span>业务地图 · 路网可分析</span></h1>
+      <h1 class="brand">LBS-Master <span>业务地图 · 情景×路网</span></h1>
       <nav class="nav" aria-label="业务包">
         <button type="button" data-pack="overview" class="active">区域总览</button>
         <button type="button" data-pack="o2o">到店</button>
@@ -25,97 +25,107 @@
       <span class="synth-tag" id="synth-note">Synthetic</span>
     </header>
 
-    <div class="ctx">
-      <label>区域
-        <select disabled><option>上海（含临港）</option></select>
-      </label>
-      <label>日内
-        <select id="sel-tod">
-          <option value="wd_am_peak">工作日早高峰</option>
-          <option value="wd_pm_peak" selected>工作日晚高峰</option>
-          <option value="we_aft">周末下午</option>
+    <!-- 05.2 两卡主控：时间情景 × 天气；镜头分离 -->
+    <div class="ctx ctx-scene">
+      <div class="scene-card">
+        <span class="scene-card-label">时间情景</span>
+        <select id="sel-time" title="analysis_scene.time_scenario">
+          <option value="wd_night">工作日 · 夜间</option>
+          <option value="wd_am_peak">工作日 · 早高峰</option>
+          <option value="wd_day_offpeak">工作日 · 平峰</option>
+          <option value="wd_pm_peak" selected>工作日 · 晚高峰</option>
+          <option value="we_day">周末/节假 · 日间</option>
+          <option value="we_night">周末/节假 · 夜间</option>
         </select>
-      </label>
-      <label>节点
+      </div>
+      <div class="scene-card">
+        <span class="scene-card-label">天气</span>
+        <select id="sel-weather" title="analysis_scene.weather">
+          <option value="clear" selected>晴 / 常规</option>
+          <option value="rain">雨</option>
+          <option value="extreme">极端</option>
+        </select>
+      </div>
+      <span class="scene-chip" id="scene-chip">工作日·晚高峰 · 晴 · CI≈—</span>
+      <label class="ctx-node">节点
         <select id="sel-node">
-          <option value="baseline" selected>日常 baseline</option>
-          <option value="national_day">国庆节点</option>
+          <option value="baseline" selected>日常</option>
+          <option value="national_day">国庆</option>
         </select>
       </label>
-      <label>情景
-        <select id="sel-scenario">
-          <option value="A" selected>A · 晴</option>
-          <option value="B">B · 雨</option>
-        </select>
-      </label>
-      <button type="button" class="primary" id="btn-story-river">叙事·晚高峰过江</button>
-      <button type="button" id="btn-story-rain">叙事·雨天出行</button>
-      <button type="button" id="btn-story-hub">叙事·虹桥履约</button>
+      <span class="ctx-sep">|</span>
+      <span class="ctx-lens-label">镜头</span>
+      <button type="button" class="lens" id="btn-lens-lz" title="仅 flyTo，不改 analysis_scene">陆家嘴</button>
+      <button type="button" class="lens" id="btn-lens-hq" title="仅 flyTo">虹桥</button>
+      <button type="button" class="lens" id="btn-lens-lg" title="仅 flyTo">临港</button>
       <button type="button" class="primary" id="btn-export">导出 snapshot</button>
-      <span style="margin-left:auto;font-size:11px;">点<strong style="color:var(--text)">道路</strong>或<strong style="color:var(--text)">区面</strong></span>
     </div>
 
     <div class="story" id="story">
       <span class="story-tag">NARRATIVE</span>
       <div class="story-body">
-        <div class="t" id="story-t">总览：路网是地面业务的地板</div>
-        <div class="d" id="story-d">默认底图 + 路网拥堵 + 类型区面 + 面热力。点路段 → 右侧「路段分析」讲业务难度。</div>
+        <div class="t" id="story-t">选中对象 · scene 芯片 · 硬指标</div>
+        <div class="d" id="story-d">改两卡情景驱动路网色与难度；镜头只移动地图。</div>
       </div>
       <div class="story-metrics">
         <div><b id="sm-obj">—</b>选中对象</div>
-        <div><b id="sm-cong">—</b>拥堵路占比</div>
-        <div><b id="sm-diff">×1.0</b>业务难度系数</div>
+        <div><b id="sm-ci">—</b>city CI</div>
+        <div><b id="sm-diff">×1.0</b>难度系数</div>
       </div>
     </div>
 
     <div class="main">
       <div class="map-pane">
         <div id="map" role="application" aria-label="地图"></div>
-        <div class="hint-click">点击彩色<strong>道路</strong>→ 路段分析</div>
+        <div class="hint-click">点<strong>道路</strong>→路段分析 · 缩放在左下</div>
 
-        <div class="map-float">
+        <div class="map-float map-float-tl" id="map-layers" aria-label="图层坞">
+          <div class="card layers-card">
+            <strong>图层坞</strong>
+            <label><input type="checkbox" id="ly-basemap" checked /> 高德底图</label>
+            <label><input type="checkbox" id="ly-water" checked /> 水系</label>
+            <label><input type="checkbox" id="ly-road" checked /> 路网</label>
+            <label><input type="checkbox" id="ly-zone" checked /> 区面</label>
+            <label><input type="checkbox" id="ly-heat" checked /> 热力</label>
+            <label><input type="checkbox" id="ly-poi" /> 站/店</label>
+            <label><input type="checkbox" id="ly-overlay" checked /> 选中圈</label>
+            <label><input type="checkbox" id="ly-legend" checked /> 图例</label>
+            <div class="layers-hint">关底图后深色底+矢量仍可见 · 底图仅高德</div>
+          </div>
           <div class="card">
-            <strong>路网分析显示</strong>
+            <strong>路网显示</strong>
             <div class="row">
               <button type="button" class="chip on" data-rm="cong">拥堵</button>
-              <button type="button" class="chip" data-rm="grade">等级/车速</button>
+              <button type="button" class="chip" data-rm="grade">等级</button>
               <button type="button" class="chip" data-rm="biz">业务难度</button>
             </div>
-            <div style="margin-top:6px;font-size:10px;line-height:1.35">
-              整段 way 一色 · 不分上下行 · 随高峰/雨天变
-            </div>
+            <div class="layers-hint">整段 way 一色 · Synthetic·非真路况 API</div>
           </div>
           <div class="card">
-            <strong>图层</strong>
-            <label><input type="checkbox" id="ly-road" checked /> 路网</label>
-            <label><input type="checkbox" id="ly-zone" checked /> 商圈/功能区</label>
-            <label><input type="checkbox" id="ly-heat" checked /> 区域热力</label>
-            <label><input type="checkbox" id="ly-poi" /> 站/店实体</label>
-          </div>
-          <div class="card">
-            <strong>区域热力形态 <span style="font-weight:400;color:var(--muted)">同指标</span></strong>
+            <strong>热力形态</strong>
             <div class="row">
               <button type="button" class="chip on" data-heat="poly">区面</button>
               <button type="button" class="chip" data-heat="grid">细格</button>
-              <button type="button" class="chip" data-heat="kde">核密度</button>
+              <button type="button" class="chip" data-heat="kde">KDE</button>
             </div>
           </div>
         </div>
 
-        <div class="map-float bottom">
+        <div class="map-float map-float-br" id="legend-float">
           <div class="card">
-            <strong id="legend-title">图例 · 拥堵（整段 way）</strong>
+            <strong id="legend-title">图例 · 路况四档</strong>
             <div class="legend-line" id="legend-body">
               <span><i class="sw" style="background:#3dd68c"></i>畅通</span>
-              <span><i class="sw" style="background:#e6c07b"></i>缓行</span>
-              <span><i class="sw" style="background:#f07178"></i>拥堵</span>
+              <span><i class="sw" style="background:#e6c07b"></i>缓慢</span>
+              <span><i class="sw" style="background:#fb923c"></i>拥堵</span>
+              <span><i class="sw" style="background:#f07178"></i>严重</span>
             </div>
+            <div class="legend-synth">Synthetic · 非真路况 API</div>
             <div class="legend-line" style="margin-top:6px">
               <span><i class="sw box" style="background:#7C3AED"></i>商业</span>
               <span><i class="sw box" style="background:#F5F0E8"></i>住宅</span>
               <span><i class="sw box" style="background:#93C5FD"></i>工业</span>
               <span><i class="sw box" style="background:#0D9488"></i>办公</span>
-              <span><i class="sw box" style="background:#FBBF24"></i>枢纽</span>
             </div>
           </div>
         </div>
@@ -125,7 +135,19 @@
         <div class="side-head">
           <h2 id="side-title">分析面板</h2>
           <div class="meta" id="side-meta">业务列表 / 路段分析</div>
-          <div class="formula" id="formula-box">gap = demand - supply (scene=ride)</div>
+          <!-- 05.2 24h 趋势 -->
+          <div class="trend-card" id="trend-card">
+            <div class="trend-head">
+              <strong>24h 拥堵趋势</strong>
+              <div class="row">
+                <button type="button" class="chip on" id="trend-wd" data-series="weekday">工作日</button>
+                <button type="button" class="chip" id="trend-we" data-series="weekend">周末</button>
+              </div>
+            </div>
+            <svg id="trend-svg" viewBox="0 0 280 72" width="100%" height="72" aria-label="CI 曲线"></svg>
+            <div class="trend-foot" id="trend-foot">当前 scene 竖线 · 点击曲线段可切换时间档</div>
+          </div>
+          <div class="formula" id="formula-box">gap = demand - supply</div>
         </div>
         <div class="side-tabs">
           <button type="button" class="on" data-panel="list">业务列表</button>
@@ -140,30 +162,28 @@
         <div class="list-wrap hidden" id="panel-road">
           <div class="detail" style="border:none;max-height:none">
             <h3 id="rd-name">未选中路段</h3>
-            <div class="k">道路等级</div>
-            <div class="v" id="rd-grade">点击地图上的道路</div>
-            <div class="k">当前拥堵（整段）</div>
+            <div class="k">道路等级 / 锚点</div>
+            <div class="v" id="rd-grade">点击地图道路</div>
+            <div class="k">拥堵档 · CI · 均速(合成)</div>
             <div class="v" id="rd-cong">—</div>
-            <div class="k">情景</div>
+            <div class="k">analysis_scene</div>
             <div class="v" id="rd-ctx">—</div>
-            <div class="impact" id="rd-impact">
-              选中路段后说明：拥堵如何抬高出行等待、压缩履约时效圈。
-            </div>
+            <div class="impact" id="rd-impact">选中路段后说明业务影响。</div>
             <div class="k" style="margin-top:10px">关联区域</div>
             <div class="v" id="rd-zones">—</div>
           </div>
         </div>
         <div class="detail" id="detail-zone">
           <h3>提示</h3>
-          <div class="v">打开即地图感 · 禁止 1km 糊格主视觉</div>
+          <div class="v">旅程 A：看趋势 → 切早/晚峰 → 切雨 → 点廊道路段</div>
         </div>
       </aside>
     </div>
 
     <footer class="foot">
       <span id="status">启动中…</span>
-      <span>© OpenStreetMap contributors · 高德仅底图 Key 本地 · Synthetic</span>
-      <span>PRD 05.1 · 路网=线分析 · 热力=面 · 情景联动</span>
+      <span>© OSM · 高德底图 Key 本地 · Synthetic</span>
+      <span>PRD 05.2 · analysis_scene 两卡 · 路况四档</span>
     </footer>
   </div>
 
