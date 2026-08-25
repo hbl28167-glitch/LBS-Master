@@ -1,0 +1,53 @@
+{
+  "version": "0.2.0",
+  "prd": "05.2 §3.2.1",
+  "synthetic": true,
+  "description": "Six analysis time_scenario bins. 平峰 merged to wd_day_offpeak (no wd_noon).",
+  "default_id": "wd_pm_peak",
+  "scenarios": [
+    {
+      "id": "wd_night",
+      "label_zh": "工作日 · 夜间",
+      "day_type": "weekday",
+      "clock_windows": ["22:00-24:00", "00:00-06:00"],
+      "meaning": "畅通底；夜间补能/运维"
+    },
+    {
+      "id": "wd_am_peak",
+      "label_zh": "工作日 · 早高峰",
+      "day_type": "weekday",
+      "clock_windows": ["07:00-09:00"],
+      "meaning": "通勤；典型立交/高架锚点生效"
+    },
+    {
+      "id": "wd_day_offpeak",
+      "label_zh": "工作日 · 平峰",
+      "day_type": "weekday",
+      "clock_windows": ["09:00-17:00"],
+      "meaning": "峰间基线（含午间平台，无独立中午档）"
+    },
+    {
+      "id": "wd_pm_peak",
+      "label_zh": "工作日 · 晚高峰",
+      "day_type": "weekday",
+      "clock_windows": ["17:00-19:30"],
+      "meaning": "日内压力上界"
+    },
+    {
+      "id": "we_day",
+      "label_zh": "周末/节假 · 日间",
+      "day_type": "weekend_holiday",
+      "clock_windows": ["10:00-20:00"],
+      "meaning": "峰型后移/拉长；商圈文旅"
+    },
+    {
+      "id": "we_night",
+      "label_zh": "周末/节假 · 夜间",
+      "day_type": "weekend_holiday",
+      "clock_windows": ["20:00-24:00", "00:00-10:00"],
+      "meaning": "相对畅通"
+    }
+  ],
+  "removed": ["wd_noon"],
+  "analysis_scene": "analysis_scene = { time_scenario, weather }"
+}

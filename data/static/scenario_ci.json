@@ -1,0 +1,73 @@
+{
+  "version": "0.2.0",
+  "prd": "05.2 §3.2–3.3",
+  "synthetic": true,
+  "description": "City CI seed × weather_f for road impedance / congestion color / accessibility. Not live traffic API. Shape references public mobility patterns only.",
+  "formula": "CI_way = city_CI[time_scenario] * weather_f[weather] * corridor_f(way, time); v_way = v0(highway) / CI_way",
+  "city_CI": {
+    "wd_night": 1.0,
+    "wd_am_peak": 1.75,
+    "wd_day_offpeak": 1.3,
+    "wd_pm_peak": 1.95,
+    "we_day": 1.45,
+    "we_night": 1.05
+  },
+  "weather_f": {
+    "clear": 1.0,
+    "rain": 1.15,
+    "extreme": 1.35
+  },
+  "cong_class_bins": {
+    "note": "Guide thresholds on CI_way (tunable in D)",
+    "free": { "ci_max": 1.15 },
+    "slow": { "ci_max": 1.45 },
+    "cong": { "ci_max": 1.85 },
+    "severe": { "ci_max": null }
+  },
+  "v0_kmh_by_highway": {
+    "motorway": 80,
+    "motorway_link": 50,
+    "trunk": 60,
+    "trunk_link": 40,
+    "primary": 45,
+    "primary_link": 35,
+    "secondary": 35,
+    "secondary_link": 30,
+    "tertiary": 30,
+    "tertiary_link": 25,
+    "default": 28
+  },
+  "difficulty_from_ci": {
+    "note": "Business difficulty multipliers derived from city_CI*weather_f for ride/delivery/o2o",
+    "ride": "1 + 0.35 * (CI - 1)",
+    "delivery": "1 + 0.45 * (CI - 1)",
+    "o2o": "1 + 0.2 * (CI - 1)"
+  },
+  "lookup_city_ci": {
+    "clear": {
+      "wd_night": 1.0,
+      "wd_am_peak": 1.75,
+      "wd_day_offpeak": 1.3,
+      "wd_pm_peak": 1.95,
+      "we_day": 1.45,
+      "we_night": 1.05
+    },
+    "rain": {
+      "wd_night": 1.15,
+      "wd_am_peak": 2.01,
+      "wd_day_offpeak": 1.5,
+      "wd_pm_peak": 2.24,
+      "we_day": 1.67,
+      "we_night": 1.21
+    },
+    "extreme": {
+      "wd_night": 1.35,
+      "wd_am_peak": 2.36,
+      "wd_day_offpeak": 1.76,
+      "wd_pm_peak": 2.63,
+      "we_day": 1.96,
+      "we_night": 1.42
+    }
+  },
+  "attribution": "Synthetic calibration. Morphology informed by public urban mobility patterns; no crawl, no commercial traffic API."
+}

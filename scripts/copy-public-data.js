@@ -28,6 +28,10 @@ const copies = [
   ["data/static/weather_coeff.json", "weather_coeff.json"],
   ["data/static/calendar.json", "calendar.json"],
   ["data/static/congestion_coeff.json", "congestion_coeff.json"],
+  ["data/static/time_scenario.json", "time_scenario.json"],
+  ["data/static/scenario_ci.json", "scenario_ci.json"],
+  ["data/static/ci_series_24h.json", "ci_series_24h.json"],
+  ["data/static/typical_road_anchors.json", "typical_road_anchors.json"],
   ["data/static/anchors_shanghai.json", "anchors_shanghai.json"],
   ["data/static/corridor_copy.json", "corridor_copy.json"]
 ];

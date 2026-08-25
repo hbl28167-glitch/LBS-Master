@@ -1,0 +1,79 @@
+{
+  "version": "0.2.0",
+  "prd": "05.2 §3.3 early-peak typical segments",
+  "synthetic": true,
+  "description": "AM-peak mean-speed anchors for name-matched corridors. Strong only under time_scenario=wd_am_peak; rain multiplies via weather_f.",
+  "active_time_scenarios": ["wd_am_peak"],
+  "match_strategy": {
+    "field": "name",
+    "mode": "substring_any_keyword",
+    "case_sensitive": false,
+    "also_try_fields": ["name:zh", "ref"],
+    "priority": "first_match_in_list_order",
+    "unmatched": "use city_CI * weather_f * highway class only"
+  },
+  "anchors": [
+    {
+      "corridor_id": "xinzhuang_interchange",
+      "label_zh": "莘庄立交",
+      "name_keywords": ["莘庄立交", "莘庄"],
+      "am_peak_speed_kmh": 16.11,
+      "ci_boost": 1.35,
+      "note": "southwest gateway"
+    },
+    {
+      "corridor_id": "nanbei_elevated",
+      "label_zh": "南北高架",
+      "name_keywords": ["南北高架", "南北高架路"],
+      "am_peak_speed_kmh": 19.4,
+      "ci_boost": 1.28,
+      "note": "N-S elevated spine"
+    },
+    {
+      "corridor_id": "beidi_elevated",
+      "label_zh": "北翟高架",
+      "name_keywords": ["北翟高架", "北翟路"],
+      "am_peak_speed_kmh": 22.46,
+      "ci_boost": 1.18,
+      "note": "west approach"
+    },
+    {
+      "corridor_id": "huanxi_avenue",
+      "label_zh": "环西一/二大道",
+      "name_keywords": ["环西一大道", "环西二大道", "环西大道"],
+      "am_peak_speed_kmh": 24.24,
+      "ci_boost": 1.12,
+      "note": "west ring"
+    },
+    {
+      "corridor_id": "jinshajiang_w",
+      "label_zh": "金沙江西路",
+      "name_keywords": ["金沙江西路", "金沙江路"],
+      "am_peak_speed_kmh": 17.52,
+      "ci_boost": 1.3,
+      "note": "inner west artery"
+    },
+    {
+      "corridor_id": "huannan_avenue",
+      "label_zh": "环南一/二大道",
+      "name_keywords": ["环南一大道", "环南二大道", "环南大道"],
+      "am_peak_speed_kmh": 27.61,
+      "ci_boost": 1.08,
+      "note": "south ring"
+    },
+    {
+      "corridor_id": "zhenbei_interchange",
+      "label_zh": "真北路立交",
+      "name_keywords": ["真北路立交", "真北路"],
+      "am_peak_speed_kmh": 24.69,
+      "ci_boost": 1.15,
+      "note": "NW interchange"
+    }
+  ],
+  "runtime_hint": {
+    "when": "time_scenario === 'wd_am_peak'",
+    "ci_way": "max(city_CI * weather_f * class_f, city_CI * weather_f * anchor.ci_boost)",
+    "or_speed": "prefer am_peak_speed_kmh when name matches; else v0/CI"
+  },
+  "attribution": "Synthetic anchor speeds for demo storytelling. Morphology reference only — not scraped live speeds, not a traffic API product."
+}

@@ -1,86 +1,93 @@
-# HANDOFF · WS-B zones / water / fine-grids（05.1）
+# HANDOFF · WS-B zones / water / fine-grids / 05.2 情景静态表
 
 - 仓：`C:\Users\hongbol\Documents\LBS-Master`
-- commit：`252a220` — `feat(data): shanghai zones water fine-grids; deprecate 1km UI grid`
-- 路网底座：见 `HANDOFF-WS-B2.md`（须先 PASS）
-- 本交付：功能区面 + 水系 + 可变细格；**删除 1km 格作为 UI 主数据**
-- 注：本会话**未**大改 D 渲染；`public/data` 已有 zones/water，D 需接线默认图层
+- 路网底座：`HANDOFF-WS-B2.md`（QC PASS，本波不重下 B2）
+- 本交付：区面贴路 v2 验收 + **05.2 情景/CI/典型路段**静态 JSON
 
-## zone_id 规则（冻结）
+## zone_id 规则（冻结 · 未改）
 
 ```text
 sh:z:{type}:{slug}
 ```
 
-| 段 | 含义 | 例 |
-|----|------|-----|
-| `sh` | 上海 | |
-| `z` | zone | |
-| `type` | `retail\|residential\|office\|industrial\|hub\|scenic\|rural` | `retail` |
-| `slug` | 稳定英文短名 | `lujiazui_retail` |
+例：`sh:z:retail:nanjing_east` · `sh:z:hub:hongqiao`  
+改 id = 必须重做 C/D 挂接。
 
-**完整例：** `sh:z:retail:nanjing_east` · `sh:z:hub:hongqiao`
+## 几何 v2（贴路）
 
-- 改 id = **必须**重做挂 zone 的 C/D 指标与 UI 选中态。  
-- 几何：GCJ-02 Polygon（示意椭圆 AOI，贴公开中心点）。  
-- 分级：`retail` → `premium|mass|community`；`residential` → `dense_mass|improve|premium_low`；其它 `grade=null`。  
-- 配色 token：`scripts/lib/color-tokens.js` / `zones_shanghai.json.color_tokens`（05.1：商业紫、工业浅蓝、住宅米白…）。
+| 项 | 值 |
+|----|-----|
+| 方法 | `roads_gcj` 半径采样 → 凸包 + 微膨胀（`scripts/lib/zone-geom.js`） |
+| 禁止 | 光滑椭圆主视觉 |
+| fallback | `irregular_fallback`（路网过稀） |
+| 构建 | `npm run build:zones` → `npm run copy:public-data` |
 
-## fine grid_id（冻结 · 热力细格）
+### by_geometry_method（实跑）
+
+见构建日志 / `zones_shanghai.json.by_geometry_method`。目标：**road_convex_hull 占绝大多数**。
+
+抽检说明（无截图文件时人工）：
+
+1. `npm run serve` → 开区面层  
+2. 陆家嘴 / 徐家汇 / 虹桥：边界应有折线感，非正椭圆气泡  
+3. 对照路网层：凸包贴主干走向  
+
+## 05.2 静态规则（供 D 着色 / E 等时）
+
+| 文件 | 用途 |
+|------|------|
+| `data/static/time_scenario.json` | 6 档 time_scenario（平峰=`wd_day_offpeak`，无 `wd_noon`） |
+| `data/static/scenario_ci.json` | `city_CI` + `weather_f` + `lookup_city_ci` + v0 等级 |
+| `data/static/ci_series_24h.json` | 工作日/周末 24h CI（夜低·早峰·午平台·晚峰最高）+ hour→scenario |
+| `data/static/typical_road_anchors.json` | 早高峰典型路段均速锚点 + name 匹配策略 |
+| `data/static/congestion_coeff.json` | 业务 difficulty，**6×天气**与 CI 同源（v0.2） |
+
+全部 copy 到 `public/data/*`（`copy-public-data.js`）。
+
+### city_CI 初值（clear）
+
+| time_scenario | city_CI |
+|---------------|--------:|
+| wd_night | 1.00 |
+| wd_am_peak | 1.75 |
+| wd_day_offpeak | 1.30 |
+| wd_pm_peak | 1.95 |
+| we_day | 1.45 |
+| we_night | 1.05 |
+
+`weather_f`: clear=1.0 · rain=1.15 · extreme=1.35  
+
+### 典型路段（wd_am_peak 强锚定）
+
+莘庄立交 16.11 · 南北高架 19.40 · 北翟 22.46 · 环西 24.24 · 金沙江西 17.52 · 环南 27.61 · 真北立交 24.69（km/h）  
+匹配：`name` 子串白名单，见 `typical_road_anchors.json`。
+
+## 水系
+
+示意黄浦江等已删（不准）；`water_shanghai.geojson` 为空，底图自带水系。
+
+## fine grid_id（冻结）
 
 ```text
 sh:f:{cell_m}:{row}:{col}
 ```
 
-- `cell_m` ∈ `{250,500,1000}`（建成区细、空旷粗）  
-- **不是** UI 默认主视觉；默认热力用 **区面**。
-
-## 旧 1km 格
-
-- 规则仍为 `sh:{cell_m}:{row}:{col}`（WS-B 原冻结，C 指标可能仍 join）  
-- `grids.json` 已标 `ui_default_layer: false`、`product_layer: false`  
-- **禁止**再当打开地图的主图层
-
-## 水系 water_id
-
-```text
-sh:w:{slug}
-```
-
-例：`sh:w:huangpu` · `sh:w:dishui_lake` · UI 默认开。
+非 UI 默认。旧 1km `sh:{cell_m}:{row}:{col}` 仅计算兼容。
 
 ## 如何构建
 
 ```bash
 npm run build:zones
-npm run build:water
-npm run build:grids:fine
 npm run copy:public-data
-# 或整包
-npm run build
+# 静态 JSON 无需编译，改文件后 copy 即可
 ```
-
-## 产物 → public/data
-
-| 文件 | UI |
-|------|-----|
-| `zones_shanghai.geojson` + `.json` | 默认区面层 |
-| `water_shanghai.geojson` | 默认水系 |
-| `grids_fine.json` | 热力模式=细格 |
-| `grids.json` | 兼容计算，**非默认** |
-| `docs/data-attribution.md` | 署名 |
-
-## 体量（batch）
-
-- **batch1**：核心商圈/CBD/枢纽/临港/主要居住与产业（演示优先）  
-- **batch2**：外围区县铺开  
-- 统计见构建日志 / `zones_shanghai.json.by_batch`
 
 ## 下游
 
-- **C**：指标优先挂 `zone_id`；细格热力用 `sh:f:…`；勿再假设 UI 读 1km 格。  
-- **D**：默认图层 = 底图 + water + roads + zones；细格/KDE 切换；1km 格勿默认绘制。
+- **D**：两卡读 `time_scenario` + `weather`；路色用 `scenario_ci`×锚点；趋势用 `ci_series_24h`；区面用 geojson  
+- **E**：等时权 `length/v`，v 来自同一 CI 表  
+- **C**：difficulty 优先 `congestion_coeff` 六档键  
 
-## OSM building
+## 署名
 
-Could，未做；不替代 zones。
+`docs/data-attribution.md` — 情景/CI **Synthetic**，形态参考公开规律，**非真 API、不爬取**。
