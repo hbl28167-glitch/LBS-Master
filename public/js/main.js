@@ -15,6 +15,11 @@
   let qualityIssues = [];
   let lastSiting = null;
   let storeById = new Map();
+  let siteById = new Map();
+  let lastAccessResult = null;
+  let lastAccessCompare = null;
+  let energySortKey = "gap_near";
+  let accessBusy = false;
 
   const PACK_LABEL = {
     overview: "区域总览",
@@ -196,12 +201,24 @@
         : "到店网络浏览 · " + chip;
     }
     if (ctx.active_pack === "energy") {
+      if (ctx.selected_site_id && lastAccessResult && lastAccessResult.ok) {
+        const n10 = LBSAccess.countInBand(lastAccessResult, 10);
+        return (
+          "点站圈 10min 覆盖 " +
+          n10 +
+          " 区 · " +
+          chip +
+          (lastAccessCompare
+            ? " · Δ区 " + lastAccessCompare.delta_coverage_count
+            : "")
+        );
+      }
       return (
-        "能源站网 " +
+        "能源看板 " +
         chargerCount() +
-        " 站 · " +
+        " 站 · KPI+功率 · " +
         chip +
-        "（深看板/等时圈 → E）"
+        " · 点站等时圈"
       );
     }
     if (ctx.active_pack === "governance") {
@@ -400,8 +417,17 @@
     }
 
     if (pack === "energy" || has("chargers")) {
-      mapApp.setPoints(chargerList(), "charger", ctx.lodLevel, null);
-      if (ctx.siting_open && lastSiting && lastSiting.results) {
+      const sites = chargerList();
+      const focusId = ctx.selected_site_id || null;
+      mapApp.setPoints(
+        sites,
+        "charger",
+        ctx.lodLevel,
+        focusId ? { focusId: focusId, mode: "dim" } : null
+      );
+      if (focusId && lastAccessResult && lastAccessResult.ok) {
+        mapApp.setIsochrones(lastAccessResult.bands, { fillOpacity: 0.14 });
+      } else if (ctx.siting_open && lastSiting && lastSiting.results) {
         mapApp.setSitingMarkers(lastSiting.results, lastSiting.winner);
       }
       return;
@@ -511,6 +537,437 @@
     });
   }
 
+  function accessCtx() {
+    const gapIds = new Set();
+    computeZoneList(
+      Object.assign({}, AppContext.get(), { active_pack: "energy" })
+    ).forEach(function (m) {
+      if (m.ok && m.gap != null && m.gap >= 12) gapIds.add(m.zone_id);
+    });
+    const qcOk =
+      data.manifest &&
+      (data.manifest.roads_qc_pass === true ||
+        (data.roads && data.roads.features && data.roads.features.length > 1000));
+    return {
+      roads: data.roads,
+      scenarioCi: data.scenario_ci,
+      anchorsDoc: data.typical_road_anchors,
+      zoneById: zoneById,
+      gapZoneIds: gapIds,
+      roadsQcOk: !!qcOk
+    };
+  }
+
+  function energyKpis(ctx) {
+    const sites = chargerList();
+    let totalKw = 0;
+    let openN = 0;
+    let highUtil = 0;
+    sites.forEach(function (s) {
+      totalKw += Number(s.total_rated_kw || s.max_power_kw || s.power_kw || 0);
+      if (s.status === "open" || !s.status) openN += 1;
+      if ((s.utilization_synth || 0) >= 0.7) highUtil += 1;
+    });
+    const gaps = LBSMetrics.topShortage(
+      computeZoneList(
+        Object.assign({}, ctx, { active_pack: "energy" })
+      ),
+      50
+    );
+    // rough 10min cover rate when site selected
+    let coverRate = "—";
+    if (lastAccessResult && lastAccessResult.ok) {
+      const n10 = LBSAccess.countInBand(lastAccessResult, 10);
+      const nAll = lastAccessResult.zone_coverage
+        ? lastAccessResult.zone_coverage.length
+        : 1;
+      coverRate = Math.round((n10 / Math.max(1, nAll)) * 100) + "%";
+    }
+    return {
+      site_n: sites.length,
+      total_mw: Math.round((totalKw / 1000) * 10) / 10,
+      open_rate: sites.length
+        ? Math.round((openN / sites.length) * 100) + "%"
+        : "—",
+      gap_zones: gaps.length,
+      high_util: highUtil,
+      cover_10: coverRate
+    };
+  }
+
+  function sortSites(list, ctx) {
+    const gapByZone = new Map();
+    computeZoneList(
+      Object.assign({}, ctx, { active_pack: "energy" })
+    ).forEach(function (m) {
+      if (m.ok) gapByZone.set(m.zone_id, m.gap || 0);
+    });
+    const arr = list.slice();
+    const key = energySortKey || "gap_near";
+    arr.sort(function (a, b) {
+      if (key === "power") {
+        return (
+          (b.total_rated_kw || b.max_power_kw || 0) -
+          (a.total_rated_kw || a.max_power_kw || 0)
+        );
+      }
+      if (key === "util") {
+        return (b.utilization_synth || 0) - (a.utilization_synth || 0);
+      }
+      if (key === "name") {
+        return String(a.name || "").localeCompare(String(b.name || ""), "zh");
+      }
+      // gap_near
+      return (gapByZone.get(b.zone_id) || 0) - (gapByZone.get(a.zone_id) || 0);
+    });
+    return arr;
+  }
+
+  function paintEnergyBoard(ctx) {
+    const tabE = $("tab-energy");
+    if (tabE) tabE.classList.remove("hidden");
+    const pe = $("panel-energy");
+    const pl = $("panel-list");
+    const pr = $("panel-road");
+    // default show energy board (unless user on road tab)
+    const showEnergy = ctx.side_panel !== "road";
+    if (pe) pe.classList.toggle("hidden", !showEnergy);
+    if (pl) pl.classList.add("hidden");
+    if (pr) pr.classList.toggle("hidden", ctx.side_panel !== "road");
+    document.querySelectorAll(".side-tabs button").forEach(function (b) {
+      const p = b.getAttribute("data-panel");
+      b.classList.toggle(
+        "on",
+        showEnergy ? p === "energy" : p === ctx.side_panel
+      );
+    });
+    if (!showEnergy) return;
+
+    const kpi = energyKpis(ctx);
+    const kpiEl = $("energy-kpi");
+    if (kpiEl) {
+      kpiEl.innerHTML =
+        kpiCell(kpi.site_n, "站点数 (site)") +
+        kpiCell(kpi.total_mw + " MW", "功率能力") +
+        kpiCell(kpi.gap_zones, "缺口区数") +
+        kpiCell(kpi.cover_10, "10min 区覆盖") +
+        kpiCell(kpi.open_rate, "开放率 Synth") +
+        kpiCell(kpi.high_util, "高负荷站数");
+    }
+
+    const listEl = $("energy-list");
+    if (!listEl) return;
+    listEl.innerHTML = "";
+    const sorted = sortSites(chargerList(), ctx).slice(0, 80);
+    const gapByZone = new Map();
+    computeZoneList(
+      Object.assign({}, ctx, { active_pack: "energy" })
+    ).forEach(function (m) {
+      if (m.ok) gapByZone.set(m.zone_id, m.gap || 0);
+    });
+    sorted.forEach(function (s) {
+      const id = s.site_id || s.entity_id;
+      const row = document.createElement("div");
+      row.className =
+        "energy-row" + (ctx.selected_site_id === id ? " sel" : "");
+      const gap = gapByZone.get(s.zone_id);
+      const z = zoneById.get(s.zone_id);
+      row.innerHTML =
+        '<div class="er-name">' +
+        (s.name || id) +
+        '</div><div><span class="pill mid">' +
+        (s.power_tier_label || (s.max_power_kw || s.power_kw || "—") + "kW") +
+        "</span></div>" +
+        '<div class="er-meta">' +
+        ((z && z.name) || s.zone_id || "—") +
+        " · " +
+        (s.stall_count || s.stalls || "?") +
+        " 桩 · 总" +
+        (s.total_rated_kw || "—") +
+        "kW · 利用 " +
+        Math.round((s.utilization_synth || 0) * 100) +
+        "%" +
+        (gap != null ? " · 邻缺口 " + gap.toFixed(0) : "") +
+        "</div>";
+      row.addEventListener("click", function () {
+        selectEnergySite(id);
+      });
+      listEl.appendChild(row);
+    });
+
+    paintEnergyDetail(ctx);
+  }
+
+  function kpiCell(v, lab) {
+    return (
+      '<div class="kpi-item"><div class="kv">' +
+      v +
+      '</div><div class="kl">' +
+      lab +
+      "</div></div>"
+    );
+  }
+
+  function selectEnergySite(siteId) {
+    const site = siteById.get(siteId);
+    if (!site) return;
+    lastAccessCompare = null;
+    if (AppContext.get().active_pack !== "energy") {
+      AppContext.switchPack("energy");
+    }
+    AppContext.set({
+      selected_site_id: siteId,
+      selected_entity: siteId,
+      selected_zone_id: site.zone_id || null,
+      side_panel: "energy"
+    });
+    mapApp.focusLatLng(site.lat, site.lng, 14);
+    runSiteAccess(site);
+  }
+
+  function runSiteAccess(site) {
+    if (!site || !global.LBSAccess) return;
+    if (accessBusy) return;
+    accessBusy = true;
+    setStatus("计算服务等时圈…");
+    // defer so UI paints
+    setTimeout(function () {
+      try {
+        const ctx = AppContext.get();
+        const a = analysisOf(ctx);
+        const res = LBSAccess.fromPoint(
+          {
+            source: {
+              kind: "site",
+              id: site.site_id || site.entity_id,
+              lat: site.lat,
+              lng: site.lng
+            },
+            analysis_scene: a,
+            bands_min: [5, 10, 15],
+            include_zone_eta: true,
+            max_radius_m: 12000
+          },
+          accessCtx()
+        );
+        lastAccessResult = res;
+        if (!res.ok) {
+          showBanner(
+            "等时圈失败：" + (res.message || res.error_code) + "（Synthetic 规则）",
+            true
+          );
+        } else {
+          showBanner("", false);
+        }
+        paintMap(AppContext.get());
+        paintEnergyDetail(AppContext.get());
+        paintStory(AppContext.get());
+        setStatus(
+          res.ok
+            ? "等时圈就绪 · " +
+                (res.stats && res.stats.elapsed_ms) +
+                "ms · 10min 区 " +
+                LBSAccess.countInBand(res, 10)
+            : "等时圈不可用"
+        );
+      } catch (e) {
+        console.error(e);
+        setStatus("等时圈异常");
+      }
+      accessBusy = false;
+    }, 30);
+  }
+
+  function paintEnergyDetail(ctx) {
+    const box = $("energy-detail");
+    const cover = $("energy-cover");
+    if (!box) return;
+    const sid = ctx.selected_site_id;
+    if (!sid) {
+      box.innerHTML =
+        "<h3>点选站点</h3><div class='v'>列表/地图单位 = <strong>site</strong>（小李充电站）。含功率结构。点站 → 5/10/15min 服务圈 + 覆盖区表。可用「情景Δ」对比平峰晴 vs 晚峰雨。</div>";
+      if (cover) cover.innerHTML = "";
+      return;
+    }
+    const s = siteById.get(sid);
+    if (!s) return;
+    const z = zoneById.get(s.zone_id);
+    const a = analysisOf(ctx);
+    let html =
+      "<h3>" +
+      (s.name || sid) +
+      "</h3>" +
+      "<div class='k'>site_id / 区</div><div class='v'><code>" +
+      sid +
+      "</code> · " +
+      ((z && z.name) || s.zone_id || "—") +
+      "</div>" +
+      "<div class='k'>功率（Must）</div><div class='v'>" +
+      (s.power_structure_label || s.power_tier_label || "—") +
+      " · 峰值 " +
+      (s.max_power_kw || s.power_kw || "—") +
+      "kW · 站额定总 " +
+      (s.total_rated_kw || "—") +
+      "kW · " +
+      (s.stall_count || s.stalls || "?") +
+      " 桩</div>" +
+      "<div class='k'>状态 · 利用 (Synthetic)</div><div class='v'>" +
+      (s.status || "open") +
+      " · " +
+      Math.round((s.utilization_synth || 0) * 100) +
+      "% · " +
+      (s.open_hours || "") +
+      "</div>" +
+      "<div class='k'>analysis_scene</div><div class='v'>" +
+      a.time_scenario +
+      " · " +
+      a.weather +
+      "</div>";
+
+    if (lastAccessResult && lastAccessResult.ok) {
+      const n5 = LBSAccess.countInBand(lastAccessResult, 5);
+      const n10 = LBSAccess.countInBand(lastAccessResult, 10);
+      const n15 = LBSAccess.countInBand(lastAccessResult, 15);
+      html +=
+        "<div class='k'>服务圈覆盖区数</div><div class='v'>5min <b>" +
+        n5 +
+        "</b> · 10min <b>" +
+        n10 +
+        "</b> · 15min <b>" +
+        n15 +
+        "</b></div>" +
+        "<div class='iso-legend'>" +
+        "<span><i style='background:#22c55e'></i>5min</span>" +
+        "<span><i style='background:#eab308'></i>10min</span>" +
+        "<span><i style='background:#f97316'></i>15min</span>" +
+        " · 非导航 · Synthetic</div>";
+      if (lastAccessResult.warnings && lastAccessResult.warnings.length) {
+        html +=
+          "<div class='k'>诚实声明</div><div class='v'>" +
+          lastAccessResult.warnings.join(" · ") +
+          "</div>";
+      }
+    } else if (lastAccessResult && !lastAccessResult.ok) {
+      html +=
+        "<div class='err' style='margin-top:8px'>" +
+        (lastAccessResult.message || lastAccessResult.error_code) +
+        "</div>";
+    } else {
+      html += "<div class='v' style='margin-top:8px'>计算服务圈中…</div>";
+    }
+
+    if (lastAccessCompare) {
+      html +=
+        "<div class='delta-card'>" +
+        LBSAccess.adviceTemplate(
+          s,
+          lastAccessCompare,
+          s.power_structure_label || s.power_tier_label
+        ) +
+        "<br/>A=" +
+        lastAccessCompare.scene_a.time_scenario +
+        "/" +
+        lastAccessCompare.scene_a.weather +
+        " (" +
+        lastAccessCompare.coverage_count_a +
+        "区) → B=" +
+        lastAccessCompare.scene_b.time_scenario +
+        "/" +
+        lastAccessCompare.scene_b.weather +
+        " (" +
+        lastAccessCompare.coverage_count_b +
+        "区)</div>";
+    }
+
+    html +=
+      "<p style='margin-top:8px'>" +
+      "<button type='button' id='btn-rerun-iso'>重算圈</button> " +
+      "<button type='button' id='btn-compare-site'>平峰晴 vs 晚峰雨 Δ</button> " +
+      "<button type='button' id='btn-clear-site'>取消选站</button>" +
+      "</p>";
+    box.innerHTML = html;
+
+    if (cover) {
+      if (lastAccessResult && lastAccessResult.ok) {
+        const rows = lastAccessResult.zone_coverage
+          .filter(function (z) {
+            return z.in_band && (z.in_band["10"] || z.in_band["15"]);
+          })
+          .sort(function (a, b) {
+            return (a.eta_min || 99) - (b.eta_min || 99);
+          })
+          .slice(0, 12);
+        let t =
+          "<div class='k'>覆盖区表（≤15min，Top12）</div><table><thead><tr><th>区</th><th>类型</th><th>ETA</th><th>缺口</th></tr></thead><tbody>";
+        rows.forEach(function (z) {
+          t +=
+            "<tr><td>" +
+            (z.name || z.zone_id) +
+            "</td><td>" +
+            (z.zone_type || "—") +
+            "</td><td>" +
+            (z.eta_min != null ? z.eta_min + "′" : "—") +
+            "</td><td>" +
+            (z.is_gap ? "<span class='pill hi'>缺口</span>" : "—") +
+            "</td></tr>";
+        });
+        t += "</tbody></table>";
+        cover.innerHTML = t;
+      } else cover.innerHTML = "";
+    }
+
+    const b1 = $("btn-rerun-iso");
+    if (b1)
+      b1.onclick = function () {
+        runSiteAccess(s);
+      };
+    const b2 = $("btn-compare-site");
+    if (b2)
+      b2.onclick = function () {
+        runSceneCompare(s);
+      };
+    const b3 = $("btn-clear-site");
+    if (b3)
+      b3.onclick = function () {
+        lastAccessResult = null;
+        lastAccessCompare = null;
+        AppContext.set({ selected_site_id: null });
+        mapApp.clearOverlay();
+      };
+  }
+
+  function runSceneCompare(site) {
+    if (!site || !global.LBSAccess) return;
+    setStatus("情景对比计算中…");
+    setTimeout(function () {
+      const cmp = LBSAccess.compareScenes(
+        site,
+        { time_scenario: "wd_day_offpeak", weather: "clear" },
+        { time_scenario: "wd_pm_peak", weather: "rain" },
+        accessCtx(),
+        10
+      );
+      lastAccessCompare = cmp;
+      // show pressure scene rings
+      if (cmp.result_b && cmp.result_b.ok) {
+        lastAccessResult = cmp.result_b;
+        AppContext.setAnalysisScene("wd_pm_peak", "rain");
+      } else {
+        paintEnergyDetail(AppContext.get());
+      }
+      setStatus(
+        "Δ 10min 覆盖 " +
+          cmp.coverage_count_a +
+          "→" +
+          cmp.coverage_count_b +
+          "（" +
+          (cmp.delta_coverage_count >= 0 ? "+" : "") +
+          cmp.delta_coverage_count +
+          "）"
+      );
+    }, 40);
+  }
+
   function paintFine(ctx) {
     if (!data.heat_fine || !data.grids_fine) return;
     const sc = LBSMetrics.sceneKey(sceneForPack(ctx.active_pack));
@@ -557,7 +1014,7 @@
           : ctx.active_pack === "fulfillment"
             ? "履约 · 需求/时效"
             : ctx.active_pack === "energy"
-              ? "能源 · 补能缺口"
+              ? "能源运营看板"
               : ctx.active_pack === "o2o"
                 ? ctx.storeFocusMode
                   ? "到店 · 单店聚焦"
@@ -599,6 +1056,19 @@
     if (sitingHost && !(ctx.active_pack === "energy" && ctx.siting_open)) {
       sitingHost.innerHTML = "";
       sitingHost.style.display = "none";
+    }
+
+    if (ctx.active_pack === "energy") {
+      // energy uses dedicated panel; still allow zone gap rows under siting
+      if (ctx.siting_open && ctx.siting_zone_id) {
+        /* fall through after board for siting host */
+      } else {
+        paintEnergyBoard(ctx);
+        return;
+      }
+      paintEnergyBoard(ctx);
+      if (ctx.siting_open && ctx.siting_zone_id) renderSitingHost(ctx.siting_zone_id);
+      return;
     }
 
     if (ctx.active_pack === "governance") {
@@ -1195,10 +1665,25 @@
     document.querySelectorAll(".side-tabs button").forEach(function (b) {
       b.classList.toggle("on", b.getAttribute("data-panel") === ctx.side_panel);
     });
-    if ($("panel-list"))
-      $("panel-list").classList.toggle("hidden", ctx.side_panel !== "list");
-    if ($("panel-road"))
-      $("panel-road").classList.toggle("hidden", ctx.side_panel !== "road");
+    const tabE = $("tab-energy");
+    if (tabE) {
+      if (ctx.active_pack === "energy") tabE.classList.remove("hidden");
+      else tabE.classList.add("hidden");
+    }
+    if (ctx.active_pack === "energy") {
+      const showE = ctx.side_panel !== "road";
+      if ($("panel-energy"))
+        $("panel-energy").classList.toggle("hidden", !showE);
+      if ($("panel-list")) $("panel-list").classList.add("hidden");
+      if ($("panel-road"))
+        $("panel-road").classList.toggle("hidden", ctx.side_panel !== "road");
+    } else {
+      if ($("panel-energy")) $("panel-energy").classList.add("hidden");
+      if ($("panel-list"))
+        $("panel-list").classList.toggle("hidden", ctx.side_panel !== "list");
+      if ($("panel-road"))
+        $("panel-road").classList.toggle("hidden", ctx.side_panel !== "road");
+    }
     if ($("scene-badge")) {
       const a2 = analysisOf(ctx);
       $("scene-badge").innerHTML =
@@ -1341,8 +1826,28 @@
   }
 
   let suppressCongWrite = false;
+  let lastSceneKey = "";
 
   function onState(ctx) {
+    // re-run isochrone when analysis_scene changes with a selected site
+    const sk =
+      (ctx.analysis_scene &&
+        ctx.analysis_scene.time_scenario + "|" + ctx.analysis_scene.weather) ||
+      "";
+    if (
+      ctx.active_pack === "energy" &&
+      ctx.selected_site_id &&
+      sk &&
+      sk !== lastSceneKey &&
+      !accessBusy
+    ) {
+      lastSceneKey = sk;
+      const site = siteById.get(ctx.selected_site_id);
+      if (site) runSiteAccess(site);
+    } else if (sk) {
+      lastSceneKey = sk;
+    }
+
     if (!suppressCongWrite && data) {
       const bundle = sceneBundle(ctx);
       const cityCi = bundle.congestion_index;
@@ -1463,6 +1968,24 @@
       });
     });
     if ($("btn-export")) $("btn-export").onclick = exportSnapshot;
+    if ($("energy-sort"))
+      $("energy-sort").onchange = function () {
+        energySortKey = $("energy-sort").value;
+        if (AppContext.get().active_pack === "energy") {
+          paintEnergyBoard(AppContext.get());
+        }
+      };
+    if ($("btn-energy-compare"))
+      $("btn-energy-compare").onclick = function () {
+        const ctx = AppContext.get();
+        const sid = ctx.selected_site_id;
+        if (!sid) {
+          setStatus("请先点选一座站再做情景Δ");
+          return;
+        }
+        const site = siteById.get(sid);
+        if (site) runSceneCompare(site);
+      };
     // 镜头 = 仅 flyTo，禁止改 analysis_scene
     if ($("btn-lens-lz"))
       $("btn-lens-lz").onclick = function () {
@@ -1489,15 +2012,52 @@
       "snap_" +
       new Date().toISOString().replace(/[:.]/g, "-") +
       "_" +
-      ctx.scenario;
+      (ctx.analysis_scene
+        ? ctx.analysis_scene.time_scenario + "_" + ctx.analysis_scene.weather
+        : ctx.scenario);
     AppContext.set({ snapshot_id: snapId });
     const payload = {
       snapshot_id: snapId,
       exported_at: new Date().toISOString(),
       synthetic: true,
       brand_note: "小李* · no employer site names",
-      formula: LBSMetrics.FORMULA_RIDE,
+      formula:
+        ctx.active_pack === "energy"
+          ? LBSMetrics.FORMULA_CHG
+          : LBSMetrics.FORMULA_RIDE,
       context: AppContext.exportContext(),
+      energy:
+        ctx.active_pack === "energy"
+          ? {
+              selected_site_id: ctx.selected_site_id,
+              kpi: energyKpis(ctx),
+              access: lastAccessResult
+                ? {
+                    ok: lastAccessResult.ok,
+                    stats: lastAccessResult.stats,
+                    warnings: lastAccessResult.warnings,
+                    cover_10: LBSAccess.countInBand(lastAccessResult, 10),
+                    cover_15: LBSAccess.countInBand(lastAccessResult, 15)
+                  }
+                : null,
+              compare: lastAccessCompare
+                ? {
+                    scene_a: lastAccessCompare.scene_a,
+                    scene_b: lastAccessCompare.scene_b,
+                    coverage_count_a: lastAccessCompare.coverage_count_a,
+                    coverage_count_b: lastAccessCompare.coverage_count_b,
+                    delta_coverage_count: lastAccessCompare.delta_coverage_count,
+                    advice: lastAccessCompare
+                      ? LBSAccess.adviceTemplate(
+                          siteById.get(ctx.selected_site_id) || {},
+                          lastAccessCompare,
+                          null
+                        )
+                      : null
+                  }
+                : null
+            }
+          : null,
       rows: top.map(function (r) {
         return {
           zone_id: r.zone_id,
@@ -1695,8 +2255,8 @@
           return;
         }
         if (pack === "energy") {
-          setStatus("小李充电 · " + (ent.name || ent.entity_id));
-          AppContext.set({ selected_entity: ent.entity_id });
+          const sid = ent.site_id || ent.entity_id;
+          selectEnergySite(sid);
           return;
         }
         // o2o / fulfillment → single-store focus
@@ -1717,9 +2277,13 @@
       onState(ctx);
     });
 
-    // index stores + quality mock
+    // index stores + sites + quality mock
     storeList().forEach(function (e) {
       if (e && e.entity_id) storeById.set(e.entity_id, e);
+    });
+    chargerList().forEach(function (e) {
+      const id = e.site_id || e.entity_id;
+      if (id) siteById.set(id, e);
     });
     qualityIssues = LBSMetrics.mockQualityIssues(storeList(), chargerList());
 

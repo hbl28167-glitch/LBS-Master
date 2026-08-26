@@ -233,6 +233,8 @@
       storeFocusMode: false,
       siting_open: false,
       siting_zone_id: null,
+      selected_site_id: p === "energy" ? state.selected_site_id : null,
+      side_panel: p === "energy" ? "energy" : "list",
       metric_key:
         p === "ride"
           ? "ride_gap"

@@ -491,7 +491,6 @@
     }
 
     function setSitingMarkers(cands, winnerId) {
-      // draw on overlay as diamond-ish circles
       (cands || []).forEach(function (c) {
         if (c.lat == null) return;
         const win = winnerId && c.cand_id === winnerId;
@@ -507,6 +506,38 @@
               (c.total != null ? " · " + c.total : ""),
             { sticky: true }
           )
+          .addTo(overlayLayer);
+      });
+    }
+
+    /** Isochrone bands from AccessibilityResult.bands */
+    function setIsochrones(bands, opts) {
+      const o = opts || {};
+      if (o.clear !== false) {
+        // only clear if not stacking; default clear whole overlay first by caller
+      }
+      const colors = o.colors || {
+        5: "#22c55e",
+        10: "#eab308",
+        15: "#f97316"
+      };
+      const sorted = (bands || []).slice().sort(function (a, b) {
+        return b.minutes - a.minutes;
+      });
+      sorted.forEach(function (b) {
+        if (!b.geometry) return;
+        const col = colors[b.minutes] || "#38bdf8";
+        L.geoJSON(b.geometry, {
+          style: {
+            color: col,
+            weight: 2,
+            fillColor: col,
+            fillOpacity: o.fillOpacity != null ? o.fillOpacity : 0.12,
+            dashArray: b.minutes === 15 ? "4 3" : null
+          },
+          interactive: false
+        })
+          .bindTooltip(b.minutes + " min 服务圈", { sticky: false })
           .addTo(overlayLayer);
       });
     }
@@ -582,6 +613,7 @@
       setEtaRing: setEtaRing,
       setOverlayRings: setOverlayRings,
       setSitingMarkers: setSitingMarkers,
+      setIsochrones: setIsochrones,
       clearOverlay: clearOverlay,
       showLayer: showLayer,
       isBasemapOn: isBasemapOn,

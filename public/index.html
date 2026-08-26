@@ -152,6 +152,28 @@
         <div class="side-tabs">
           <button type="button" class="on" data-panel="list">业务列表</button>
           <button type="button" data-panel="road">路段分析</button>
+          <button type="button" data-panel="energy" id="tab-energy" class="hidden">能源看板</button>
+        </div>
+        <!-- 05.2 能源运营看板 -->
+        <div class="list-wrap hidden" id="panel-energy">
+          <div class="kpi-bar" id="energy-kpi" aria-label="站网 KPI"></div>
+          <div class="energy-toolbar">
+            <label>排序
+              <select id="energy-sort">
+                <option value="gap_near">邻缺口</option>
+                <option value="power">总功率</option>
+                <option value="util">利用率</option>
+                <option value="name">名称</option>
+              </select>
+            </label>
+            <button type="button" id="btn-energy-compare" title="固定站对比平峰晴 vs 晚峰雨">情景Δ</button>
+          </div>
+          <div class="energy-list" id="energy-list"></div>
+          <div class="energy-detail" id="energy-detail">
+            <h3>点选站点</h3>
+            <div class="v">列表/地图单位 = <strong>site</strong>（非桩林）。点站 → 5/10/15 服务圈 + 覆盖区表。</div>
+          </div>
+          <div class="energy-cover" id="energy-cover"></div>
         </div>
         <div class="list-wrap" id="panel-list">
           <table>
@@ -198,6 +220,7 @@
   </script>
   <script src="js/app-context.js"></script>
   <script src="js/metrics.js"></script>
+  <script src="js/accessibility.js"></script>
   <script src="js/data-loader.js"></script>
   <script src="js/map-app.js"></script>
   <script src="js/main.js"></script>
