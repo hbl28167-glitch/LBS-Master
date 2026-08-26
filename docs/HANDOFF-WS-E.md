@@ -2,7 +2,7 @@
 
 - 仓：`C:\Users\hongbol\Documents\LBS-Master`
 - branch：`master`
-- commit：见 `git log -1` — `feat(app): energy board isochrone per PRD 05.2`
+- commit：`74f0d0a` — `feat(app): energy board isochrone per PRD 05.2`
 - 依赖：D analysis_scene 两卡 · C `entities_charger` site+功率 · B roads_gcj · scenario_ci
 - 验收：`docs/acceptance-side-path.md` · PRD 05.2 §2 旅程 B / §3.5–3.6
 
