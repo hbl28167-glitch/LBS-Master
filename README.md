@@ -4,12 +4,12 @@ Portable **LBS business map console** (Shanghai domain).
 Static shell + Node build pipeline. Synthetic ops metrics on spatial fabric: **OSM→GCJ roads (analyzable)**, **typed zones**, water, entities.
 
 **Not:** consumer navigation, live traffic API, or a single-industry BI.  
-**Is:** map-first mid-platform sample — *road narrative + zone heat + multi-scene packs* for the Agent era.
+**Is:** map-first mid-platform sample — *two-card analysis_scene · structural road CI · site service rings* for the Agent era.
 
 **Requirements:** Node.js **18+**
 
-**Acceptance:** map UX / spatial shell → PRD **05.1**；**业务评估（analysis_scene / 可达 E / 能源站点服务圈）→ PRD 05.2**。  
-**Informal only:** `Byteda/P1/demo/*.html` — layout/story preview, **not** this repo’s product data or QC’d roads. Do not demo those HTML files as LBS-Master.
+**Acceptance truth:** PRD **05.2** (scenario cards, road CI, energy board + isochrones). Map shell history: 05.1.  
+**Informal only:** `Byteda/P1/demo/*.html` — layout preview, **not** this product. Do not demo those HTML files as LBS-Master.
 
 ---
 
@@ -24,11 +24,11 @@ Static shell + Node build pipeline. Synthetic ops metrics on spatial fabric: **O
                            │ capability calls only
 ┌──────────────────────────▼──────────────────────────────┐
 │ Capability mid-layer                                      │
-│  zone gap · road line analysis · heat modes · S5 · quality│
+│  analysis_scene · road CI · E.fromPoint rings · S5 · gap  │
 └──────────────────────────┬──────────────────────────────┘
 ┌──────────────────────────▼──────────────────────────────┐
 │ Data foundation                                           │
-│  roads_gcj · zones · water · entities · coeffs · manifest │
+│  roads_gcj · zones · scenario_ci · sites+power · manifest │
 │  Adapter: demo (小李* synthetic)                          │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -52,23 +52,23 @@ Frozen field names live under `contracts/`. UI reads only `public/data/*` (copie
    Do **not** open `index.html` via `file://`.
 8. Source under `scripts/` / `public/` uses relative paths only.
 
-**UI (PRD 05.1):** map-first — basemap + **water** + **roads default on** (cong/grade/biz) + **typed zones** + **poly heat**. Six tabs clickable. **No 1km grid hero.**
+**UI (PRD 05.2):** two cards **时间×天气** → `analysis_scene` only; structural **road CI** (not flat red); **road-aligned zones**; overview **24h CI trend**; **Energy** = site KPI board + 5/10/15 rings. **No 1km grid hero.** Lenses = flyTo only.
 
 ---
 
-## Demo main path (Must · ~3–5 min · PRD 05.1)
+## Demo main path (Must · ~3–5 min · PRD 05.2)
 
 Full talk track: [`docs/demo-script.md`](docs/demo-script.md)  
-Checklists: `docs/acceptance-main-path.md` · `docs/acceptance-side-path.md`
+Checklists: `docs/acceptance-main-path.md` (旅程 A) · `docs/acceptance-side-path.md` (旅程 B)
 
 | Step | UI action |
 |------|-----------|
-| 1 | **总览** first paint: 路网 + 区面类型色 + 面热力 + 黄浦江（认地图感） |
-| 2 | 路网模式 拥堵/等级/难度 → **点过江路段** → 右侧「路段分析」；或点 **叙事·晚高峰过江** |
-| 3 | 情景 **B · 雨**（或 **叙事·雨天出行**）→ 路更堵 + 叙事条难度系数升 |
-| 4 | **出行** → zone demand×supply÷difficulty · TopN · 只读公式 |
-| 5 | **履约** 时效圈随雨缩小，或 **到店** 点店 → 单店聚焦覆盖圈 |
-| 6 | **导出 snapshot** → context + rows JSON |
+| 1 | **两卡** `#sel-time` × `#sel-weather` 定 scene；读 scene 芯片（镜头钮不改 scene） |
+| 2 | 总览：早高峰·晴 → **廊道结构红** + 四档图例；区面贴路（非椭圆泡） |
+| 3 | 右栏 **24h 趋势** 一句（双峰 + 当前档竖线）；可切晚峰/雨看 CI 上界 |
+| 4 | **能源**：KPI 条 → 站列表点 **site** → 功率详情 → **5/10/15 圈** + 覆盖表 |
+| 5 | **平峰晴 vs 晚峰雨 Δ** → 规则决策句 |
+| 6 | **导出 snapshot**（scene + site + bands + Δ） |
 
 **Not the product:** Byteda `P1/demo/` HTML mockups.
 
@@ -174,4 +174,4 @@ Portability record: [`docs/portability-check.md`](docs/portability-check.md).
 
 ## Suggested GitHub blurb
 
-> Shanghai LBS **business map console** (PRD 05.1): analyzable OSM→GCJ roads, typed zones, water, zone heat, road-segment narrative, ride + fulfillment + O2O focus. Synthetic 小李* metrics. Static UI, clone-anywhere. BYO Gaode config. Not a nav app / not live traffic.
+> Shanghai LBS **business map console** (PRD 05.2): two-card analysis_scene, structural road CI, road-aligned zones, 24h trend, energy site board + 5/10/15 service rings. OSM→GCJ, Synthetic 小李*. Clone-anywhere. BYO Gaode. Not nav / not live traffic API.
