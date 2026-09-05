@@ -1,0 +1,1 @@
+{"region_id":"qiantan_xuhui_riverside","status":"pass","feature_count":4164,"grade_counts":{"R1":483,"R5":817,"R2":676,"R4":582,"R3":540,"R6":1066},"oneway_count":2108,"bridge_count":479,"tunnel_count":35,"giant_component_ratio":0.9897,"synthetic_speed_ratio":0.964,"nodes":15685,"directed_edges":25996,"errors":[],"warnings":[]}

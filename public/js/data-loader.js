@@ -2,6 +2,7 @@
   "use strict";
 
   const DATA_BASE = "data/";
+  const regionCache = new Map();
 
   async function fetchJson(name) {
     const url = DATA_BASE + name;
@@ -42,7 +43,8 @@
       time_scenario,
       scenario_ci,
       ci_series_24h,
-      typical_road_anchors
+      typical_road_anchors,
+      region_catalog
     ] = await Promise.all([
       fetchJson("manifest.json"),
       fetchJson("zones_shanghai.geojson"),
@@ -68,7 +70,8 @@
       tryJson("time_scenario.json", null),
       tryJson("scenario_ci.json", null),
       tryJson("ci_series_24h.json", null),
-      tryJson("typical_road_anchors.json", null)
+      tryJson("typical_road_anchors.json", null),
+      tryJson("region_catalog.json", { regions: [] })
     ]);
 
     return {
@@ -94,6 +97,7 @@
       scenario_ci: scenario_ci,
       ci_series_24h: ci_series_24h,
       typical_road_anchors: typical_road_anchors,
+      region_catalog: region_catalog,
       heat_fine: null,
       grids_fine: null
     };
@@ -112,9 +116,43 @@
     }
   }
 
+  async function loadRegion(regionId) {
+    if (!regionId || regionId === "lujiazui_bund") return null;
+    if (regionCache.has(regionId)) return regionCache.get(regionId);
+    const request = (async function () {
+      const base = "regions/" + regionId + "/";
+      const meta = await fetchJson(base + "meta.json");
+      const files = meta.files || {};
+      const [roads, zones, buildings, entities, metrics] = await Promise.all([
+        fetchJson(base + files.roads),
+        fetchJson(base + files.zones),
+        files.buildings ? fetchJson(base + files.buildings) : Promise.resolve(null),
+        fetchJson(base + files.entities),
+        fetchJson(base + files.metrics)
+      ]);
+      return {
+        region_id: regionId,
+        meta: meta,
+        roads: roads,
+        zones: zones,
+        buildings: buildings,
+        entities: entities,
+        metrics: metrics
+      };
+    })();
+    regionCache.set(regionId, request);
+    try {
+      return await request;
+    } catch (error) {
+      regionCache.delete(regionId);
+      throw error;
+    }
+  }
+
   global.LBSData = {
     loadCore: loadCore,
     loadHeatFine: loadHeatFine,
+    loadRegion: loadRegion,
     fetchJson: fetchJson
   };
 })(typeof window !== "undefined" ? window : globalThis);

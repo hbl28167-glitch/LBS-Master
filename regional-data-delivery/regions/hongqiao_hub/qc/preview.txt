@@ -1,0 +1,1 @@
+Open roads-v3.gcj02.geojson + zones-v3.gcj02.geojson in QGIS/geojson.io for visual QC. PNG optional.

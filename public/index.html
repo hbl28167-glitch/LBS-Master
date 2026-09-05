@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LBS-Master · 业务地图台</title>
+  <title>LBS-Master · 空间能力中台</title>
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <link rel="stylesheet" href="css/app.css" />
 </head>
@@ -12,15 +12,16 @@
     <div id="banner-key" class="banner-key" role="status"></div>
 
     <header class="topbar">
-      <h1 class="brand">LBS-Master <span>业务地图 · 情景×路网</span></h1>
+      <h1 class="brand">LBS-Master <span>空间能力中台</span></h1>
       <nav class="nav" aria-label="业务包">
-        <button type="button" data-pack="overview" class="active">区域总览</button>
+        <button type="button" data-pack="overview" class="active">中台总览</button>
         <button type="button" data-pack="o2o">到店</button>
         <button type="button" data-pack="ride">出行</button>
         <button type="button" data-pack="fulfillment">履约</button>
         <button type="button" data-pack="energy">能源</button>
         <button type="button" data-pack="governance">治理</button>
       </nav>
+      <span class="platform-badge"><i></i>Road V3 · Zone V3 · ETA V2 · Trust Gate</span>
       <span class="badge" id="scene-badge">scene <code>overview</code></span>
       <span class="synth-tag" id="synth-note">Synthetic</span>
     </header>
@@ -54,18 +55,27 @@
         </select>
       </label>
       <span class="ctx-sep">|</span>
-      <span class="ctx-lens-label">镜头</span>
-      <button type="button" class="lens" id="btn-lens-lz" title="仅 flyTo，不改 analysis_scene">陆家嘴</button>
-      <button type="button" class="lens" id="btn-lens-hq" title="仅 flyTo">虹桥</button>
-      <button type="button" class="lens" id="btn-lens-lg" title="仅 flyTo">临港</button>
+      <div class="region-card">
+        <span class="scene-card-label">分析区域</span>
+        <select id="sel-region" title="切换区域工作台；不改变时间与天气情景">
+          <option value="lujiazui_bund" selected>陆家嘴—外滩</option>
+          <option value="qiantan_xuhui_riverside">前滩—徐汇滨江</option>
+          <option value="xujiahui_caohejing">徐家汇—漕河泾</option>
+          <option value="hongqiao_hub">虹桥枢纽</option>
+          <option value="zhangjiang">张江科学城</option>
+          <option value="lingang">临港新城</option>
+        </select>
+      </div>
+      <span class="region-status ready" id="region-status"><i></i>深度案例已接入</span>
+      <button type="button" class="lens" id="btn-region-focus" title="定位到所选区域，不改变分析情景">定位区域</button>
       <button type="button" class="primary" id="btn-export">导出 snapshot</button>
     </div>
 
     <div class="story" id="story">
-      <span class="story-tag">NARRATIVE</span>
+      <span class="story-tag">DECISION</span>
       <div class="story-body">
-        <div class="t" id="story-t">选中对象 · scene 芯片 · 硬指标</div>
-        <div class="d" id="story-d">改两卡情景驱动路网色与难度；镜头只移动地图。</div>
+        <div class="t" id="story-t">空间中台 · 一套能力服务多业务</div>
+        <div class="d" id="story-d">区域、情景和业务彼此独立；同一 Road / Zone / ETA 口径贯穿诊断与复验。</div>
       </div>
       <div class="story-metrics">
         <div><b id="sm-obj">—</b>选中对象</div>
@@ -77,16 +87,15 @@
     <div class="main">
       <div class="map-pane">
         <div id="map" role="application" aria-label="地图"></div>
-        <div class="hint-click">点<strong>道路</strong>→路段分析 · 缩放在左下</div>
+        <div class="hint-click" id="map-hint">点<strong>道路</strong>→路段分析 · 区域与情景独立切换</div>
 
         <div class="map-float map-float-tl" id="map-layers" aria-label="图层坞">
           <div class="card layers-card">
-            <strong>图层坞</strong>
+            <strong>共享空间图层</strong>
             <label><input type="checkbox" id="ly-basemap" checked /> 高德底图</label>
-            <label><input type="checkbox" id="ly-water" checked /> 水系</label>
             <label><input type="checkbox" id="ly-road" checked /> 路网</label>
-            <label><input type="checkbox" id="ly-zone" checked /> 区面</label>
-            <label><input type="checkbox" id="ly-heat" checked /> 热力</label>
+            <label><input type="checkbox" id="ly-zone" checked /> 功能地块（推断）</label>
+            <label><input type="checkbox" id="ly-heat" /> 业务热力</label>
             <label><input type="checkbox" id="ly-poi" /> 站/店</label>
             <label><input type="checkbox" id="ly-overlay" checked /> 选中圈</label>
             <label><input type="checkbox" id="ly-legend" checked /> 图例</label>
@@ -122,11 +131,12 @@
             </div>
             <div class="legend-synth">Synthetic · 非真路况 API</div>
             <div class="legend-line" style="margin-top:6px">
-              <span><i class="sw box" style="background:#7C3AED"></i>商业</span>
-              <span><i class="sw box" style="background:#F5F0E8"></i>住宅</span>
-              <span><i class="sw box" style="background:#93C5FD"></i>工业</span>
-              <span><i class="sw box" style="background:#0D9488"></i>办公</span>
+              <span><i class="sw box" style="background:#EFA98F"></i>商业地块</span>
+              <span><i class="sw box" style="background:#F3E9D2"></i>住宅地块</span>
+              <span><i class="sw box" style="background:#AEBCCA"></i>工业地块</span>
+              <span><i class="sw box" style="background:#AFCBE8"></i>办公地块</span>
             </div>
+            <div class="legend-synth">地块颜色=功能属性 · 灰白轮廓=建筑 · 圆点=业务节点</div>
           </div>
         </div>
       </div>
@@ -135,6 +145,7 @@
         <div class="side-head">
           <h2 id="side-title">分析面板</h2>
           <div class="meta" id="side-meta">业务列表 / 路段分析</div>
+          <div class="case-brief" id="case-brief" aria-label="当前业务案例摘要"></div>
           <!-- 05.2 24h 趋势 -->
           <div class="trend-card" id="trend-card">
             <div class="trend-head">
@@ -153,6 +164,8 @@
           <button type="button" class="on" data-panel="list">业务列表</button>
           <button type="button" data-panel="road">路段分析</button>
           <button type="button" data-panel="energy" id="tab-energy" class="hidden">能源看板</button>
+          <button type="button" data-panel="anomaly" id="tab-anomaly" class="hidden">异常诊断</button>
+          <button type="button" data-panel="regional" id="tab-regional" class="hidden">区域案例</button>
         </div>
         <!-- 05.2 能源运营看板 -->
         <div class="list-wrap hidden" id="panel-energy">
@@ -167,6 +180,7 @@
               </select>
             </label>
             <button type="button" id="btn-energy-compare" title="固定站对比平峰晴 vs 晚峰雨">情景Δ</button>
+            <button type="button" id="btn-energy-anomaly" title="进入存量站覆盖异常诊断">覆盖异常诊断</button>
           </div>
           <div class="energy-list" id="energy-list"></div>
           <div class="energy-detail" id="energy-detail">
@@ -174,6 +188,23 @@
             <div class="v">列表/地图单位 = <strong>site</strong>（非桩林）。点站 → 5/10/15 服务圈 + 覆盖区表。</div>
           </div>
           <div class="energy-cover" id="energy-cover"></div>
+        </div>
+        <div class="list-wrap hidden" id="panel-anomaly">
+          <div class="anomaly-integrated">
+            <div class="ai-head"><div><span class="ai-p1">P1</span><strong id="ai-title">覆盖异常诊断</strong></div><small id="ai-id">加载中…</small></div>
+            <div class="ai-flow"><span>问题</span><i></i><span>门禁</span><i></i><span>诊断</span><i></i><span class="on">动作</span><i></i><span>SLA</span><i></i><span>复验</span></div>
+            <div class="ai-modes"><button type="button" class="on" data-ai-mode="issue">异常覆盖</button><button type="button" data-ai-mode="cause">空间根因</button><button type="button" data-ai-mode="plan">方案复验</button></div>
+            <div class="ai-kpis" id="ai-kpis"></div>
+            <section class="ai-card"><h3>可信度门禁 <small>数据能否用于决策</small></h3><div class="ai-gates" id="ai-gates"></div></section>
+            <section class="ai-card"><h3>根因贡献 <small>数据质量 ≠ 业务根因</small></h3><div id="ai-causes"></div></section>
+            <section class="ai-card"><h3>推荐动作 <small>Synthetic 估算</small></h3><div id="ai-action"></div></section>
+            <section class="ai-card"><h3>任务 / SLA <small id="ai-task-id"></small></h3><div class="ai-sla" id="ai-sla"></div><div class="ai-next" id="ai-next"></div></section>
+          </div>
+        </div>
+        <div class="list-wrap hidden" id="panel-regional">
+          <div class="regional-case" id="regional-case">
+            <div class="regional-loading">正在加载区域 Road V3 / Zone V3 / 建筑 / 业务实体…</div>
+          </div>
         </div>
         <div class="list-wrap" id="panel-list">
           <table>
@@ -205,7 +236,7 @@
     <footer class="foot">
       <span id="status">启动中…</span>
       <span>© OSM · 高德底图 Key 本地 · Synthetic</span>
-      <span>PRD 05.2 · analysis_scene 两卡 · 路况四档</span>
+      <span id="foot-region">陆家嘴—外滩 · Road V3 / Zone V3 / ETA V2</span>
     </footer>
   </div>
 
@@ -224,5 +255,7 @@
   <script src="js/data-loader.js"></script>
   <script src="js/map-app.js"></script>
   <script src="js/main.js"></script>
+  <script src="js/regional-integration.js"></script>
+  <script src="js/anomaly-integration.js"></script>
 </body>
 </html>

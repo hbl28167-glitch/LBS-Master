@@ -22,12 +22,45 @@
   let accessBusy = false;
 
   const PACK_LABEL = {
-    overview: "区域总览",
+    overview: "中台总览",
     o2o: "到店",
     ride: "出行",
     fulfillment: "履约",
     energy: "能源",
     governance: "治理"
+  };
+
+  const PACK_BRIEF = {
+    overview: {
+      problem: "多业务重复建设空间能力",
+      audience: "能源 / 到店 / 出行 / 履约",
+      output: "统一底座与六区复用"
+    },
+    o2o: {
+      problem: "住宅客群看似近，实际服务覆盖不足",
+      audience: "住宅需求 → 门店",
+      output: "候选点与订单收益"
+    },
+    ride: {
+      problem: "晚高峰雨天供需缺口扩大",
+      audience: "住宅 / 酒店 / 枢纽",
+      output: "上客点与运力调度"
+    },
+    fulfillment: {
+      problem: "直线覆盖正常，路网 ETA 超时",
+      audience: "仓店 → 住宅",
+      output: "服务边界与履约收益"
+    },
+    energy: {
+      problem: "存量站 10 分钟覆盖异常收缩",
+      audience: "住宅 / 办公 / 商业需求",
+      output: "补站扩容与收益复验"
+    },
+    governance: {
+      problem: "业务反馈无法快速定位责任层",
+      audience: "业务方 / 数据 / 策略",
+      output: "Trust Gate 与 SLA"
+    }
   };
 
   function cfg() {
@@ -114,6 +147,60 @@
 
   function weatherLabel(w) {
     return w === "rain" ? "雨" : w === "extreme" ? "极端" : "晴";
+  }
+
+  function regionList() {
+    return (data && data.region_catalog && data.region_catalog.regions) || [];
+  }
+
+  function activeRegion(ctx) {
+    const list = regionList();
+    const regionId =
+      (ctx && ctx.region && ctx.region.id) ||
+      (data && data.region_catalog && data.region_catalog.default_region_id) ||
+      "lujiazui_bund";
+    return (
+      list.find(function (item) {
+        return item.region_id === regionId;
+      }) ||
+      list[0] || {
+        region_id: "lujiazui_bund",
+        name: "陆家嘴—外滩",
+        short_name: "陆家嘴",
+        center: [31.2375, 121.505],
+        zoom: 14,
+        status: "ready",
+        status_label: "深度案例已接入",
+        primary_case: "能源站网覆盖异常",
+        resident_role: "滨江住宅与跨江需求"
+      }
+    );
+  }
+
+  function focusRegion(regionId, moveMap) {
+    const target = regionList().find(function (item) {
+      return item.region_id === regionId;
+    });
+    if (!target) return;
+    const currentPack = AppContext.get().active_pack;
+    AppContext.set({
+      region: { id: target.region_id },
+      side_panel:
+        target.region_id === "lujiazui_bund"
+          ? currentPack === "energy"
+            ? "energy"
+            : "list"
+          : "regional"
+    });
+    if (moveMap && mapApp && target.center) {
+      mapApp.focusLatLng(target.center[0], target.center[1], target.zoom || 13);
+    }
+    setStatus(
+      "区域 · " +
+        target.name +
+        " · " +
+        target.status_label
+    );
   }
 
   function computeZoneList(ctx) {
@@ -235,8 +322,11 @@
     const sm3 = $("sm-diff");
     const cong = ctx.congestion || {};
     const a = analysisOf(ctx);
+    const region = activeRegion(ctx);
     if (t) {
       t.textContent =
+        region.short_name +
+        " · " +
         (PACK_LABEL[ctx.active_pack] || "") +
         " · " +
         timeLabel(a.time_scenario) +
@@ -245,8 +335,19 @@
     }
     if (d) {
       d.textContent =
-        cong.narrative ||
-        "两卡情景驱动路网色与难度；镜头仅 flyTo。";
+        (region.status === "ready"
+          ? region.primary_case + " · " + region.resident_role + "。"
+          : region.status === "conditional"
+            ? region.primary_case +
+              " · " +
+              region.resident_role +
+              "；区域数据已接入，受限图层已按质量门禁隐藏。"
+          : region.primary_case +
+            " · " +
+            region.resident_role +
+            "；高细节区域包生产中，当前结果仅作全市底层预览。") +
+        " " +
+        (cong.narrative || "");
     }
     if (sm1) {
       sm1.textContent =
@@ -308,7 +409,6 @@
     const pack = ctx.active_pack;
 
     mapApp.showLayer("basemap", has("basemap"));
-    mapApp.showLayer("water", has("water"));
     mapApp.showLayer("zones", has("zones"));
     mapApp.showLayer(
       "heat",
@@ -629,11 +729,14 @@
     const pe = $("panel-energy");
     const pl = $("panel-list");
     const pr = $("panel-road");
+    const pa = $("panel-anomaly");
     // default show energy board (unless user on road tab)
-    const showEnergy = ctx.side_panel !== "road";
+    const showAnomaly = ctx.side_panel === "anomaly";
+    const showEnergy = ctx.side_panel !== "road" && !showAnomaly;
     if (pe) pe.classList.toggle("hidden", !showEnergy);
     if (pl) pl.classList.add("hidden");
     if (pr) pr.classList.toggle("hidden", ctx.side_panel !== "road");
+    if (pa) pa.classList.toggle("hidden", !showAnomaly);
     document.querySelectorAll(".side-tabs button").forEach(function (b) {
       const p = b.getAttribute("data-panel");
       b.classList.toggle(
@@ -726,7 +829,7 @@
   }
 
   function runSiteAccess(site) {
-    if (!site || !global.LBSAccess) return;
+    if (!site || !window.LBSAccess) return;
     if (accessBusy) return;
     accessBusy = true;
     setStatus("计算服务等时圈…");
@@ -937,7 +1040,7 @@
   }
 
   function runSceneCompare(site) {
-    if (!site || !global.LBSAccess) return;
+    if (!site || !window.LBSAccess) return;
     setStatus("情景对比计算中…");
     setTimeout(function () {
       const cmp = LBSAccess.compareScenes(
@@ -1002,11 +1105,55 @@
     mapApp.renderFineHeat(cells);
   }
 
+  function renderRegionPortfolio(tbody, ctx) {
+    const current = activeRegion(ctx);
+    regionList().forEach(function (region) {
+      const tr = document.createElement("tr");
+      tr.className =
+        "region-row" + (region.region_id === current.region_id ? " sel" : "");
+      tr.innerHTML =
+        "<td><strong>" +
+        region.name +
+        "</strong><small>" +
+        region.resident_role +
+        "</small></td>" +
+        "<td><span class='region-pill " +
+        region.status +
+        "'>" +
+        (region.status === "ready"
+          ? "已接入"
+          : region.status === "conditional"
+            ? "条件接入"
+            : "生产中") +
+        "</span></td>" +
+        "<td><span class='region-case'>" +
+        region.primary_case +
+        "</span></td>";
+      tr.addEventListener("click", function () {
+        focusRegion(region.region_id, true);
+      });
+      tbody.appendChild(tr);
+    });
+  }
+
   function paintList(ctx) {
     const tbody = $("tbody");
     const sideTitle = $("side-title");
     const sideMeta = $("side-meta");
     const formula = $("formula-box");
+    const brief = PACK_BRIEF[ctx.active_pack] || PACK_BRIEF.overview;
+    if ($("case-brief")) {
+      $("case-brief").innerHTML =
+        "<div><span>主问题</span><strong>" +
+        brief.problem +
+        "</strong></div>" +
+        "<div><span>服务对象</span><strong>" +
+        brief.audience +
+        "</strong></div>" +
+        "<div><span>决策输出</span><strong>" +
+        brief.output +
+        "</strong></div>";
+    }
     if (sideTitle) {
       sideTitle.textContent =
         ctx.active_pack === "ride"
@@ -1021,11 +1168,13 @@
                   : "到店 · 商圈/门店"
                 : ctx.active_pack === "governance"
                   ? "数据质量 · 问题列表"
-                  : "区列表 · KPI";
+                  : "能力复用 · 六区工作台";
     }
     if (sideMeta) {
+      const region = activeRegion(ctx);
       sideMeta.textContent =
-        "情景 " +
+        region.short_name +
+        " · 情景 " +
         ctx.scenario +
         " · " +
         ctx.weather +
@@ -1034,7 +1183,10 @@
         " · Synthetic";
     }
     if (formula) {
-      if (ctx.active_pack === "ride" || ctx.active_pack === "overview")
+      if (ctx.active_pack === "overview")
+        formula.textContent =
+          "Road V3 → Zone V3 → ETA V2 → 业务覆盖\nTrust Gate → 空间根因 → 方案复验";
+      else if (ctx.active_pack === "ride")
         formula.textContent = LBSMetrics.FORMULA_RIDE;
       else if (ctx.active_pack === "fulfillment")
         formula.textContent = LBSMetrics.FORMULA_DELIVERY;
@@ -1050,6 +1202,11 @@
 
     if (!tbody) return;
     tbody.innerHTML = "";
+
+    if (ctx.active_pack === "overview") {
+      renderRegionPortfolio(tbody, ctx);
+      return;
+    }
 
     // clear siting host if leaving energy siting
     const sitingHost = $("siting-host");
@@ -1424,6 +1581,25 @@
     const box = $("detail-zone");
     if (!box) return;
 
+    if (ctx.active_pack === "overview") {
+      const region = activeRegion(ctx);
+      box.innerHTML =
+        "<h3>中台能力如何复用</h3>" +
+        "<div class='capability-flow'><span>道路/建筑</span><i>→</i><span>ETA/区划</span><i>→</i><span>业务诊断</span><i>→</i><span>收益复验</span></div>" +
+        "<div class='k'>当前区域</div><div class='v'>" +
+        region.name +
+        " · " +
+        region.status_label +
+        "</div>" +
+        "<div class='k'>业务落点</div><div class='v'>" +
+        region.primary_case +
+        "；" +
+        region.resident_role +
+        "。</div>" +
+        "<div class='platform-note'>能源是最完整案例；到店、出行、履约复用同一空间底座形成轻量闭环。未到货区域只展示状态，不冒充已完成数据。</div>";
+      return;
+    }
+
     if (ctx.active_pack === "governance" && window.__lastIssue) {
       const iss = window.__lastIssue;
       box.innerHTML =
@@ -1612,12 +1788,39 @@
 
   function syncChrome(ctx) {
     const a = analysisOf(ctx);
+    const region = activeRegion(ctx);
     document.querySelectorAll(".nav button[data-pack]").forEach(function (btn) {
       btn.classList.toggle("active", btn.getAttribute("data-pack") === ctx.active_pack);
     });
     if ($("sel-time")) $("sel-time").value = a.time_scenario;
     if ($("sel-weather")) $("sel-weather").value = a.weather;
     if ($("sel-node")) $("sel-node").value = ctx.season_or_node;
+    if ($("sel-region")) $("sel-region").value = region.region_id;
+    if ($("region-status")) {
+      $("region-status").classList.toggle("ready", region.status === "ready");
+      $("region-status").classList.toggle("conditional", region.status === "conditional");
+      $("region-status").classList.toggle("preparing", region.status === "preparing");
+      $("region-status").innerHTML =
+        "<i></i>" + region.status_label;
+    }
+    if ($("map-hint")) {
+      $("map-hint").innerHTML =
+        region.status === "ready"
+          ? "点<strong>道路</strong>→路段分析 · 区域与情景独立切换"
+          : region.status === "conditional"
+            ? "<strong>" + region.short_name + "</strong>条件接入 · 受限图层已隐藏"
+            : "<strong>" + region.short_name + "</strong>数据生产中 · 当前展示全市底层数据";
+    }
+    if ($("foot-region")) {
+      $("foot-region").textContent =
+        region.name +
+        " · " +
+        (region.status === "ready"
+          ? "Road V3 / Zone V3 / ETA V2"
+          : region.status === "conditional"
+            ? "Road / Zone / Entity · 质量门禁生效"
+            : "区域包待接入 · 不冒充深度数据");
+    }
     if ($("trend-wd"))
       $("trend-wd").classList.toggle("on", (ctx.trend_series || "weekday") === "weekday");
     if ($("trend-we"))
@@ -1665,22 +1868,55 @@
     document.querySelectorAll(".side-tabs button").forEach(function (b) {
       b.classList.toggle("on", b.getAttribute("data-panel") === ctx.side_panel);
     });
+    const listTab = document.querySelector(".side-tabs button[data-panel='list']");
+    if (listTab) {
+      listTab.textContent =
+        ctx.active_pack === "overview"
+          ? "区域组合"
+          : ctx.active_pack === "governance"
+            ? "问题列表"
+            : "业务列表";
+    }
     const tabE = $("tab-energy");
     if (tabE) {
       if (ctx.active_pack === "energy") tabE.classList.remove("hidden");
       else tabE.classList.add("hidden");
     }
+    const tabA = $("tab-anomaly");
+    if (tabA) {
+      if (ctx.active_pack === "energy" && region.region_id === "lujiazui_bund")
+        tabA.classList.remove("hidden");
+      else tabA.classList.add("hidden");
+    }
+    const hasRegional = region.region_id !== "lujiazui_bund" && region.status !== "preparing";
+    const tabR = $("tab-regional");
+    if (tabR) tabR.classList.toggle("hidden", !hasRegional);
+    const showR = hasRegional && ctx.side_panel === "regional";
+    if ($("panel-regional")) $("panel-regional").classList.toggle("hidden", !showR);
+    if ($("detail-zone")) $("detail-zone").classList.toggle("hidden", showR);
+    document.body.classList.toggle("regional-active", showR);
+    if ($("btn-energy-anomaly")) {
+      $("btn-energy-anomaly").disabled = region.region_id !== "lujiazui_bund";
+      $("btn-energy-anomaly").title =
+        region.region_id === "lujiazui_bund"
+          ? "进入存量站覆盖异常诊断"
+          : "完整异常诊断当前以陆家嘴深度案例展示";
+    }
     if (ctx.active_pack === "energy") {
-      const showE = ctx.side_panel !== "road";
+      const showA = ctx.side_panel === "anomaly";
+      const showE = ctx.side_panel !== "road" && !showA && !showR;
       if ($("panel-energy"))
         $("panel-energy").classList.toggle("hidden", !showE);
+      if ($("panel-anomaly"))
+        $("panel-anomaly").classList.toggle("hidden", !showA);
       if ($("panel-list")) $("panel-list").classList.add("hidden");
       if ($("panel-road"))
         $("panel-road").classList.toggle("hidden", ctx.side_panel !== "road");
     } else {
       if ($("panel-energy")) $("panel-energy").classList.add("hidden");
+      if ($("panel-anomaly")) $("panel-anomaly").classList.add("hidden");
       if ($("panel-list"))
-        $("panel-list").classList.toggle("hidden", ctx.side_panel !== "list");
+        $("panel-list").classList.toggle("hidden", ctx.side_panel !== "list" || showR);
       if ($("panel-road"))
         $("panel-road").classList.toggle("hidden", ctx.side_panel !== "road");
     }
@@ -1907,6 +2143,15 @@
       $("sel-node").onchange = function () {
         AppContext.set({ season_or_node: $("sel-node").value });
       };
+    if ($("sel-region"))
+      $("sel-region").onchange = function () {
+        focusRegion($("sel-region").value, true);
+      };
+    if ($("btn-region-focus"))
+      $("btn-region-focus").onclick = function () {
+        const region = activeRegion(AppContext.get());
+        focusRegion(region.region_id, true);
+      };
     document.querySelectorAll("[data-rm]").forEach(function (b) {
       b.addEventListener("click", function () {
         AppContext.set({ roadDisplayMode: b.getAttribute("data-rm") });
@@ -1929,7 +2174,6 @@
       const ctx = AppContext.get();
       const set = [];
       if ($("ly-basemap") && $("ly-basemap").checked) set.push("basemap");
-      if ($("ly-water") && $("ly-water").checked) set.push("water");
       if ($("ly-road") && $("ly-road").checked) {
         set.push("roads");
         set.push("road_cong");
@@ -1952,7 +2196,6 @@
     }
     [
       "ly-basemap",
-      "ly-water",
       "ly-road",
       "ly-zone",
       "ly-heat",
@@ -1985,22 +2228,6 @@
         }
         const site = siteById.get(sid);
         if (site) runSceneCompare(site);
-      };
-    // 镜头 = 仅 flyTo，禁止改 analysis_scene
-    if ($("btn-lens-lz"))
-      $("btn-lens-lz").onclick = function () {
-        mapApp.focusLatLng(31.239, 121.495, 13);
-        setStatus("镜头 · 陆家嘴（未改 analysis_scene）");
-      };
-    if ($("btn-lens-hq"))
-      $("btn-lens-hq").onclick = function () {
-        mapApp.focusLatLng(31.194, 121.32, 13);
-        setStatus("镜头 · 虹桥（未改 analysis_scene）");
-      };
-    if ($("btn-lens-lg"))
-      $("btn-lens-lg").onclick = function () {
-        mapApp.focusLatLng(30.907, 121.933, 12);
-        setStatus("镜头 · 临港（未改 analysis_scene）");
       };
   }
 
@@ -2145,13 +2372,6 @@
       }
     });
 
-    if (!amapKey) {
-      showBanner(
-        "未配置高德 Key（public/config.local.js 的 amapKey 为空）。已优先试高德瓦片；不稳定时请填开放平台 Key 后 Ctrl+F5。",
-        true
-      );
-    }
-
     try {
       data = await LBSData.loadCore();
     } catch (e) {
@@ -2186,10 +2406,10 @@
       showBanner("路网分析状态未知：请确认 roads QC。仍可浏览底图与区面。", true);
     }
 
-    mapApp.setWater(data.water);
     mapApp.setZones(zonesGeo, { showType: true });
     if (data.roads) mapApp.setRoads(data.roads);
-    mapApp.map.setView([31.23, 121.48], 12);
+    const initialRegion = activeRegion(AppContext.get());
+    mapApp.map.setView(initialRegion.center, initialRegion.zoom || 13);
 
     mapApp.setHandlers({
       onRoadClick: function (id, props, cong, _f, ll, meta) {
@@ -2335,6 +2555,13 @@
         ((data.roads && data.roads.features && data.roads.features.length) || 0) +
         " · 05.2 两卡情景"
     );
+    window.LBSMaster = {
+      mapApp: mapApp,
+      data: data,
+      selectEnergySite: selectEnergySite,
+      setStatus: setStatus
+    };
+    window.dispatchEvent(new CustomEvent("lbs-master-ready"));
   }
 
   if (document.readyState === "loading") {

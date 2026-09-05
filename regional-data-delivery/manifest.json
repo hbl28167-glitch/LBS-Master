@@ -1,0 +1,487 @@
+{
+  "generated_at": "2026-08-30T05:01:51.886Z",
+  "root": "regional-data-delivery",
+  "file_count": 96,
+  "files": [
+    {
+      "path": "ACCEPTANCE-RESULT.md",
+      "bytes": 1817,
+      "sha256": "973daebb272fb399500e82e457b01cf0889b90002a02f2642622d397164bf0d0"
+    },
+    {
+      "path": "HANDOFF.md",
+      "bytes": 4263,
+      "sha256": "8bf6721fc6e08342173ba51088baea084a08b4da987ec2eb6ca80a6f5457a371"
+    },
+    {
+      "path": "KNOWN-ISSUES.md",
+      "bytes": 1819,
+      "sha256": "8382a0d3d6114ad503482a0c77507b11a5689b306928d8a1cc1d8353bee9e2ac"
+    },
+    {
+      "path": "manifest.json",
+      "bytes": 16835,
+      "sha256": "5c1af36c76bf8d18d33f63a98b6d5fdf79d12bad27dc5118078cb63fb13950de"
+    },
+    {
+      "path": "qc-summary.json",
+      "bytes": 333,
+      "sha256": "1c72bd39a4fe3d41e81554fe9cb435c635d9b4e8351e39adbe64cdf8c5a3f58a"
+    },
+    {
+      "path": "regions/hongqiao_hub/processed/buildings.gcj02.geojson",
+      "bytes": 38158,
+      "sha256": "00215fe6e94b9bdae781c1dd6c7e362ccdd0a5c5bdb05f14014c8a592d9bd0c3"
+    },
+    {
+      "path": "regions/hongqiao_hub/processed/buildings.wgs84.geojson",
+      "bytes": 42957,
+      "sha256": "05fba65c51c56493533580d000fd7e25c74c525052e15022406062f753b76a80"
+    },
+    {
+      "path": "regions/hongqiao_hub/processed/entities.json",
+      "bytes": 2902,
+      "sha256": "474d6aacd949279e5d0d8da505358d8d18674743aa85b3d59b103f2e2b3771fb"
+    },
+    {
+      "path": "regions/hongqiao_hub/processed/roads-v3.gcj02.geojson",
+      "bytes": 1223485,
+      "sha256": "a7bebfd649338f8a841f1595a9c089c43567fea62943ce944ad3a5aea7f5e5ba"
+    },
+    {
+      "path": "regions/hongqiao_hub/processed/roads-v3.wgs84.geojson",
+      "bytes": 1381110,
+      "sha256": "9162ed8215f3ac064fcaf88ca8146d6539190e4c71e5f54e240a29b15a0dda57"
+    },
+    {
+      "path": "regions/hongqiao_hub/processed/scenario-metrics.json",
+      "bytes": 1190,
+      "sha256": "ee4f6362c0becfaa2331c59fb16223bd597e0f95a227037eb25fe64dbac967fc"
+    },
+    {
+      "path": "regions/hongqiao_hub/processed/zones-v3-review.geojson",
+      "bytes": 63234,
+      "sha256": "4ff90c359bdb01aa94a5b832a74fbf51d55bb261449e306da80d813cb498f8cc"
+    },
+    {
+      "path": "regions/hongqiao_hub/processed/zones-v3.gcj02.geojson",
+      "bytes": 230156,
+      "sha256": "70a2593a4cc8b72a5be407f464cf7959fe5615b6204e1d1d724b21c91f5e0e83"
+    },
+    {
+      "path": "regions/hongqiao_hub/processed/zones-v3.wgs84.geojson",
+      "bytes": 230168,
+      "sha256": "40fe194014687cc1b71ce54bf79fd25b88954d9723b762bf72798e0945beb61f"
+    },
+    {
+      "path": "regions/hongqiao_hub/qc/entity-qc.json",
+      "bytes": 151,
+      "sha256": "175d0eb00b3a7ca762402ad18910b1e39c1a3d41b2fe63645657413210ecd995"
+    },
+    {
+      "path": "regions/hongqiao_hub/qc/preview.txt",
+      "bytes": 101,
+      "sha256": "7fe8c572349e29ce838ab04b3580803a883888a33d61af378ffca0edadd9865f"
+    },
+    {
+      "path": "regions/hongqiao_hub/qc/road-qc.json",
+      "bytes": 288,
+      "sha256": "9ff3c1dbe85928e5ad4a06f535126f68d139220eb0199f5748a2500c514c42b4"
+    },
+    {
+      "path": "regions/hongqiao_hub/qc/zone-qc.json",
+      "bytes": 333,
+      "sha256": "1df932b51bdcc47d2810a5aa2f227b252d46ef3ab0b79715cd14715cf2b9f207"
+    },
+    {
+      "path": "regions/hongqiao_hub/raw/buildings-fallback-note.json",
+      "bytes": 138,
+      "sha256": "bb0da56423aa841927ac04799fbfcd59904078b21edd3e46c4003d7e6df1fc9b"
+    },
+    {
+      "path": "regions/hongqiao_hub/raw/roads-fallback-note.json",
+      "bytes": 68,
+      "sha256": "4d3cebd82e862f5ede1de2e4d37d39b858449ff4a31ba24b4ec462a84c3beed9"
+    },
+    {
+      "path": "regions/hongqiao_hub/raw/source-metadata.json",
+      "bytes": 514,
+      "sha256": "dd82143bac6ba9d86a18355798a0e25175a7c89f97bae082c1190689d702e083"
+    },
+    {
+      "path": "regions/hongqiao_hub/region-readme.md",
+      "bytes": 1069,
+      "sha256": "107e6c9ee90428d3e0914d8cdeebbc31e279e1c51d7bdc4a1c228a40391e3117"
+    },
+    {
+      "path": "regions/hongqiao_hub/scripts/README.md",
+      "bytes": 87,
+      "sha256": "8eece15f69f835309b7e358818999f5afb572b6fc3fb4229d26652b4a7821061"
+    },
+    {
+      "path": "regions/lingang/processed/buildings.gcj02.geojson",
+      "bytes": 37857,
+      "sha256": "051b7398ba593d4b3216e4bdf062fa92d09627a16f3bda827987783a9400a2d1"
+    },
+    {
+      "path": "regions/lingang/processed/buildings.wgs84.geojson",
+      "bytes": 42567,
+      "sha256": "7e36a2eca73b8b8a065ebe538b8b28c5f38407c20e72a5c10a45ef42fe6bfc0e"
+    },
+    {
+      "path": "regions/lingang/processed/entities.json",
+      "bytes": 3325,
+      "sha256": "abcd0c9722ef7d7efe93f293004c01828ccc10f5fd05f5825a793419788d2397"
+    },
+    {
+      "path": "regions/lingang/processed/roads-v3.gcj02.geojson",
+      "bytes": 932731,
+      "sha256": "f4f8c90498b44c0e90e45d13d0b3bf68093c6137e596abb64dea100fad44b04a"
+    },
+    {
+      "path": "regions/lingang/processed/roads-v3.wgs84.geojson",
+      "bytes": 1050398,
+      "sha256": "3885eac44e13c74050c443b9618debf5d9ce1065cf3d7c210d58d6ec234933bb"
+    },
+    {
+      "path": "regions/lingang/processed/scenario-metrics.json",
+      "bytes": 1175,
+      "sha256": "ee4d9ffec0da9d5a01e24b867636dc7711d4bc31adc3b7c8d6bc2ca525b71061"
+    },
+    {
+      "path": "regions/lingang/processed/zones-v3-review.geojson",
+      "bytes": 160951,
+      "sha256": "670c14f8e7c427284cd35f86fae45c36a347ac9f879e985b888065e06f567ec5"
+    },
+    {
+      "path": "regions/lingang/processed/zones-v3.gcj02.geojson",
+      "bytes": 245326,
+      "sha256": "353ece2f8b63b9520a5cea40ef43dd4caf775676d86d4607fd136b0200b9df12"
+    },
+    {
+      "path": "regions/lingang/processed/zones-v3.wgs84.geojson",
+      "bytes": 244939,
+      "sha256": "0bb53019192cac274ab35afc89e4180e3043279070afb1d721344b8568df0800"
+    },
+    {
+      "path": "regions/lingang/qc/entity-qc.json",
+      "bytes": 146,
+      "sha256": "666660baa6a2ddcd7461df583caf7205dfeb66617ca5c8cd5636d374e1e809fd"
+    },
+    {
+      "path": "regions/lingang/qc/preview.txt",
+      "bytes": 101,
+      "sha256": "7fe8c572349e29ce838ab04b3580803a883888a33d61af378ffca0edadd9865f"
+    },
+    {
+      "path": "regions/lingang/qc/road-qc.json",
+      "bytes": 283,
+      "sha256": "f946627d15aba257776c55ccb83443f57fd14980a11d004a41e249ef89da5514"
+    },
+    {
+      "path": "regions/lingang/qc/zone-qc.json",
+      "bytes": 327,
+      "sha256": "57449c019d3bedf2fa9f56416058ef4af99b3d6a4651311f80edb6e01a7fc9ac"
+    },
+    {
+      "path": "regions/lingang/raw/buildings-fallback-note.json",
+      "bytes": 152,
+      "sha256": "0aa7fdcf0bcfd3e1810c1f5cf257bb15dc97109aefc01b693ca295a016da8c61"
+    },
+    {
+      "path": "regions/lingang/raw/roads-fallback-note.json",
+      "bytes": 82,
+      "sha256": "7c0a5d9864d44767f1c8bcb41d1ecde05be4183ed8ca0e57aff07278fb2075e7"
+    },
+    {
+      "path": "regions/lingang/raw/source-metadata.json",
+      "bytes": 508,
+      "sha256": "bd74a6044a67615828f92c3c1fd0b0bead350cf6573a5bc914a921dc749a9c7f"
+    },
+    {
+      "path": "regions/lingang/region-readme.md",
+      "bytes": 1054,
+      "sha256": "a2e8a718a881d7e60aa2eca4c9aa3607b92282b5f875eeecd3ae10376514dd51"
+    },
+    {
+      "path": "regions/lingang/scripts/README.md",
+      "bytes": 82,
+      "sha256": "78565aa3d9513fdcf6692b9d0381c6865b0e0edabba4d16d0301ea706e3c360f"
+    },
+    {
+      "path": "regions/qiantan_xuhui_riverside/processed/buildings.gcj02.geojson",
+      "bytes": 6849830,
+      "sha256": "a4fe398dce879ef97f6cb7fb07ab447c9fb389dd5d21abfd0aef9de4a1d9e6d9"
+    },
+    {
+      "path": "regions/qiantan_xuhui_riverside/processed/buildings.wgs84.geojson",
+      "bytes": 5620575,
+      "sha256": "b368f99670d99c084b09177a876ff8c00b7a1ebd88593f8f6aa83b9991a9fa02"
+    },
+    {
+      "path": "regions/qiantan_xuhui_riverside/processed/entities.json",
+      "bytes": 4344,
+      "sha256": "d6b32056c1a43e1dd39e7760bdd725c40235c47238b095a592bdbae56844d218"
+    },
+    {
+      "path": "regions/qiantan_xuhui_riverside/processed/roads-v3.gcj02.geojson",
+      "bytes": 3170720,
+      "sha256": "7322763c4a3ccf9000a18346dc16d62591af87ca08b0d01a261ac7b7954ede6c"
+    },
+    {
+      "path": "regions/qiantan_xuhui_riverside/processed/roads-v3.wgs84.geojson",
+      "bytes": 2855710,
+      "sha256": "6deee4c5b09ae4e387be9694020abc1eccf43075e7d6f6e6aa98298045676724"
+    },
+    {
+      "path": "regions/qiantan_xuhui_riverside/processed/scenario-metrics.json",
+      "bytes": 1216,
+      "sha256": "d7abfe4dc3bcff0dddbe6fccddb8fd9f8036e9bb708c5aeacc4e50cad608e85a"
+    },
+    {
+      "path": "regions/qiantan_xuhui_riverside/processed/zones-v3-review.geojson",
+      "bytes": 150392,
+      "sha256": "9d7c6c7e4854b3d0bef4208a6faffea4bc6ae7c09771777b8f69e326eafd05f3"
+    },
+    {
+      "path": "regions/qiantan_xuhui_riverside/processed/zones-v3.gcj02.geojson",
+      "bytes": 1182056,
+      "sha256": "d72c42e884f0a7cc681758b1866c0f655809f14959b3a21bfe5fe184557523fd"
+    },
+    {
+      "path": "regions/qiantan_xuhui_riverside/processed/zones-v3.wgs84.geojson",
+      "bytes": 1181467,
+      "sha256": "776ebd414575437aa9dad2b4fd0cbf710d5bdeb0ecebc59a9fccd64327bb3477"
+    },
+    {
+      "path": "regions/qiantan_xuhui_riverside/qc/entity-qc.json",
+      "bytes": 162,
+      "sha256": "1e1932b201296bcf4c1d54c029a88205a146f06105765a9923654fa7531922af"
+    },
+    {
+      "path": "regions/qiantan_xuhui_riverside/qc/preview.txt",
+      "bytes": 101,
+      "sha256": "7fe8c572349e29ce838ab04b3580803a883888a33d61af378ffca0edadd9865f"
+    },
+    {
+      "path": "regions/qiantan_xuhui_riverside/qc/road-qc.json",
+      "bytes": 329,
+      "sha256": "476428181f184aa61214d7874a51155cc7f8635826f1d1f3d8ef484db80b00b0"
+    },
+    {
+      "path": "regions/qiantan_xuhui_riverside/qc/zone-qc.json",
+      "bytes": 389,
+      "sha256": "56dfa4e9d1af2f14b9eefcd503ae0e6230b8fb3a321d9b6f774738c7c1878f4c"
+    },
+    {
+      "path": "regions/qiantan_xuhui_riverside/raw/osm-buildings-overpass.json",
+      "bytes": 6145703,
+      "sha256": "a4df58a430a1af9714ea2db8253e5fac0f5a795b892b87d78c3bc078dc98fdf0"
+    },
+    {
+      "path": "regions/qiantan_xuhui_riverside/raw/osm-roads-overpass.json",
+      "bytes": 2761658,
+      "sha256": "2de4fd551548a7f02adce8fc4b73f402e8db5a06f5b4b7d114417b7dd3e7b3bd"
+    },
+    {
+      "path": "regions/qiantan_xuhui_riverside/raw/source-metadata.json",
+      "bytes": 524,
+      "sha256": "cf6d030d0ae01c95ec4507a7c4941a68023837aff54899f4bd5918dc11787ee5"
+    },
+    {
+      "path": "regions/qiantan_xuhui_riverside/region-readme.md",
+      "bytes": 1147,
+      "sha256": "8a87e282898eb94f753719e5209f2ac610a4f2abca9bb9c4693d10f21b3002af"
+    },
+    {
+      "path": "regions/qiantan_xuhui_riverside/scripts/README.md",
+      "bytes": 98,
+      "sha256": "f515ed3b352511c6428132f6592a2910debcd9137c39241beb5ca8dd8fc20e90"
+    },
+    {
+      "path": "regions/xujiahui_caohejing/processed/buildings.gcj02.geojson",
+      "bytes": 7944248,
+      "sha256": "c0c611976995dc0b06c3839860be268321a065df186c3aa6b8352d5c90da63a0"
+    },
+    {
+      "path": "regions/xujiahui_caohejing/processed/buildings.wgs84.geojson",
+      "bytes": 6495551,
+      "sha256": "5484afb8e09bb4c1d6b3c6c7fef9288d043fdc8064d33de6e08e52418c1a645c"
+    },
+    {
+      "path": "regions/xujiahui_caohejing/processed/entities.json",
+      "bytes": 3574,
+      "sha256": "da5c6e08ce41c7cdd8a63dff668f2d8d50b23f7e8a545e61accd8b9889506280"
+    },
+    {
+      "path": "regions/xujiahui_caohejing/processed/roads-v3.gcj02.geojson",
+      "bytes": 2915485,
+      "sha256": "39c9ed550cee8bacfeb55e14e9af5afd20e41dd99b21ef39cce6132446bd295c"
+    },
+    {
+      "path": "regions/xujiahui_caohejing/processed/roads-v3.wgs84.geojson",
+      "bytes": 2622890,
+      "sha256": "f6523e1cd331a96478ed22480245285dcd014eae11568e740442c3e0dce8deb3"
+    },
+    {
+      "path": "regions/xujiahui_caohejing/processed/scenario-metrics.json",
+      "bytes": 1208,
+      "sha256": "dfd36c9d35c037e34f161a6a314157cdc7d4355b3921339275c2383a203c84c4"
+    },
+    {
+      "path": "regions/xujiahui_caohejing/processed/zones-v3-review.geojson",
+      "bytes": 94548,
+      "sha256": "e5c25495de77f9b813c49741424e1c92f6db5db35110e960044e4668d95caaaa"
+    },
+    {
+      "path": "regions/xujiahui_caohejing/processed/zones-v3.gcj02.geojson",
+      "bytes": 1141290,
+      "sha256": "af8e82f6954fb71f2a501be8d0476307f55685fdca3a14b3bd7511a03c9a3ca2"
+    },
+    {
+      "path": "regions/xujiahui_caohejing/processed/zones-v3.wgs84.geojson",
+      "bytes": 1140938,
+      "sha256": "0b272403c9130492cf24c48199b686db2b067627e91ab6346fe67e5fb416f051"
+    },
+    {
+      "path": "regions/xujiahui_caohejing/qc/entity-qc.json",
+      "bytes": 157,
+      "sha256": "d9fcab7b2d3339ed5d520992622151e81c2f512adf3127273ca592015094750d"
+    },
+    {
+      "path": "regions/xujiahui_caohejing/qc/preview.txt",
+      "bytes": 101,
+      "sha256": "7fe8c572349e29ce838ab04b3580803a883888a33d61af378ffca0edadd9865f"
+    },
+    {
+      "path": "regions/xujiahui_caohejing/qc/road-qc.json",
+      "bytes": 377,
+      "sha256": "1fa93751721b7ccd3b86c31ecdd21e55e39194203c15fb62ac845e82a9871221"
+    },
+    {
+      "path": "regions/xujiahui_caohejing/qc/zone-qc.json",
+      "bytes": 384,
+      "sha256": "86b3592845300223e7f15890926f7ba0370329819b14315877d6ad94d6342f9f"
+    },
+    {
+      "path": "regions/xujiahui_caohejing/raw/osm-buildings-overpass.json",
+      "bytes": 7225083,
+      "sha256": "6373d2528e16675d8459e60e07c54186e878624ad0fd108b62c5d6ad9c679583"
+    },
+    {
+      "path": "regions/xujiahui_caohejing/raw/osm-roads-overpass.json",
+      "bytes": 2423331,
+      "sha256": "b397999e7c535070e62d153c33f787acdbe37c5c5f7afb0197bdb26b6e3e3173"
+    },
+    {
+      "path": "regions/xujiahui_caohejing/raw/source-metadata.json",
+      "bytes": 519,
+      "sha256": "486e55a2f0b24985436be9ddc27a9fae4100e05e1edfe22e3d357a421da471a5"
+    },
+    {
+      "path": "regions/xujiahui_caohejing/region-readme.md",
+      "bytes": 1088,
+      "sha256": "e316b9bad69e87871c8a32e1db5e8264707949bd5d41f811ac0ac1da1647697f"
+    },
+    {
+      "path": "regions/xujiahui_caohejing/scripts/README.md",
+      "bytes": 93,
+      "sha256": "0f51fe026abee88169c4b34857c1ec38df35931cbbb0e0bf1475dcce165b7d3e"
+    },
+    {
+      "path": "regions/zhangjiang/processed/buildings.gcj02.geojson",
+      "bytes": 38034,
+      "sha256": "2d94213a0f7d777632fd583fc6a3124ae57ae46149b040a107f848584b3c1230"
+    },
+    {
+      "path": "regions/zhangjiang/processed/buildings.wgs84.geojson",
+      "bytes": 42765,
+      "sha256": "121c70f2378d3ffc89f27a1cf4631aba3bedd2d26d41c6009167689d7cf2b7d8"
+    },
+    {
+      "path": "regions/zhangjiang/processed/entities.json",
+      "bytes": 3404,
+      "sha256": "0c546674d931d3c074916818139074ab57e71fd3ac8da426599d6b73ef7fa5fe"
+    },
+    {
+      "path": "regions/zhangjiang/processed/roads-v3.gcj02.geojson",
+      "bytes": 1577211,
+      "sha256": "803f8105a91ed72e9ce5c99689cac9254ba61870e0e57daced8e95936dbacaaf"
+    },
+    {
+      "path": "regions/zhangjiang/processed/roads-v3.wgs84.geojson",
+      "bytes": 1780299,
+      "sha256": "113b0aab6b9e9d2aef2d9d35a104c481adb13e28756d0362d74c0df882e93537"
+    },
+    {
+      "path": "regions/zhangjiang/processed/scenario-metrics.json",
+      "bytes": 1185,
+      "sha256": "5cc51243b32a2507014d5df0fc91d08d99a2793aeded64db54ac889f7bdb9fa4"
+    },
+    {
+      "path": "regions/zhangjiang/processed/zones-v3-review.geojson",
+      "bytes": 185476,
+      "sha256": "3e3aee538cabcda1b83f211e170194b459688758597767bf970016aed124fc61"
+    },
+    {
+      "path": "regions/zhangjiang/processed/zones-v3.gcj02.geojson",
+      "bytes": 278044,
+      "sha256": "4331087f9c1f1f826c29f2ccb5e7534638021768aa36a99e8bf98f377387a89b"
+    },
+    {
+      "path": "regions/zhangjiang/processed/zones-v3.wgs84.geojson",
+      "bytes": 277595,
+      "sha256": "f59ed6d9a5fd37f33aa9fdb8116545f6271e1478a39642c272cc2534328432e3"
+    },
+    {
+      "path": "regions/zhangjiang/qc/entity-qc.json",
+      "bytes": 149,
+      "sha256": "e697cb0d3f74898ce7141a4c6522208d9c95273fcfa437a0e976bf3d63f6d829"
+    },
+    {
+      "path": "regions/zhangjiang/qc/preview.txt",
+      "bytes": 101,
+      "sha256": "7fe8c572349e29ce838ab04b3580803a883888a33d61af378ffca0edadd9865f"
+    },
+    {
+      "path": "regions/zhangjiang/qc/road-qc.json",
+      "bytes": 285,
+      "sha256": "d14616fb207b7dce77625309dfdf7bef28c3d5d34a55e1a494c0c343146c75f5"
+    },
+    {
+      "path": "regions/zhangjiang/qc/zone-qc.json",
+      "bytes": 331,
+      "sha256": "69ec41f29608f760dd3bef2c3850c1456994c15d64687c59397b3b953204f5b1"
+    },
+    {
+      "path": "regions/zhangjiang/raw/buildings-fallback-note.json",
+      "bytes": 138,
+      "sha256": "bb0da56423aa841927ac04799fbfcd59904078b21edd3e46c4003d7e6df1fc9b"
+    },
+    {
+      "path": "regions/zhangjiang/raw/roads-fallback-note.json",
+      "bytes": 68,
+      "sha256": "4d3cebd82e862f5ede1de2e4d37d39b858449ff4a31ba24b4ec462a84c3beed9"
+    },
+    {
+      "path": "regions/zhangjiang/raw/source-metadata.json",
+      "bytes": 513,
+      "sha256": "7c8fbc6dcfce4a69d2c31e2c46f91c3e2a7e08ec12b6c44a058f24d70563d1be"
+    },
+    {
+      "path": "regions/zhangjiang/region-readme.md",
+      "bytes": 1060,
+      "sha256": "56a06cff683504574e0d58886bad643e5d6a8a15ba63a6d3dc74af6815f36b85"
+    },
+    {
+      "path": "regions/zhangjiang/scripts/README.md",
+      "bytes": 85,
+      "sha256": "7f54ee8472803e344e05829b2c7cfb8320d354f255d13603755fb9f3cbce2744"
+    },
+    {
+      "path": "scripts/verify-all.js",
+      "bytes": 3460,
+      "sha256": "e684b5a03381ad395cc2b608be51b0f9cad459b2aeb614e0fef403ad3480602e"
+    }
+  ]
+}

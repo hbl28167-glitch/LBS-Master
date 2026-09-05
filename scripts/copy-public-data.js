@@ -33,7 +33,12 @@ const copies = [
   ["data/static/ci_series_24h.json", "ci_series_24h.json"],
   ["data/static/typical_road_anchors.json", "typical_road_anchors.json"],
   ["data/static/anchors_shanghai.json", "anchors_shanghai.json"],
-  ["data/static/corridor_copy.json", "corridor_copy.json"]
+  ["data/static/corridor_copy.json", "corridor_copy.json"],
+  ["data/static/region_catalog.json", "region_catalog.json"],
+  ["experiments/zone-v3-lujiazui/data/processed/roads-v3.geojson", "roads-v3-lujiazui.geojson"],
+  ["experiments/zone-v3-lujiazui/data/processed/zones-v3-stable.geojson", "zones-v3-lujiazui.geojson"],
+  ["experiments/zone-v3-lujiazui/data/processed/blocks-v3.geojson", "blocks-v3-lujiazui.geojson"],
+  ["experiments/zone-v3-lujiazui/data/processed/anomaly-pilot.json", "anomaly-pilot.json"]
 ];
 
 fs.mkdirSync(outDir, { recursive: true });

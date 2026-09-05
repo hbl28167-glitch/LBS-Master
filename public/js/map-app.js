@@ -27,9 +27,7 @@
     basemapLayer = L.tileLayer(gaodeUrl, {
       subdomains: "1234",
       maxZoom: 18,
-      attribution: amapKey
-        ? "© 高德地图 · © OSM"
-        : "© 高德地图(无本地Key·可能不稳定) · © OSM"
+      attribution: "© 高德地图 · © OSM"
     });
     basemapLayer.on("tileload", function () {
       basemapOk = true;
@@ -93,7 +91,9 @@
             color: p.stroke || "#94a3b8",
             weight: 1.2,
             fillColor: showType ? p.fill || "#64748b" : "transparent",
-            fillOpacity: showType ? p.fill_opacity != null ? p.fill_opacity : 0.32 : 0,
+            fillOpacity: showType
+              ? Math.min(p.fill_opacity != null ? p.fill_opacity : 0.18, 0.22)
+              : 0,
             opacity: 0.9
           };
         },

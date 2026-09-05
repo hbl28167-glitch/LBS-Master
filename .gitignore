@@ -14,3 +14,28 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+
+# Python local environments and caches
+.venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+**/.pytest_cache/
+
+# Raw third-party extracts are reproducible and should not be published in git
+regional-data-delivery/regions/*/raw/**
+experiments/**/data/raw/**
+
+# Generated experiment preview copies duplicate processed artifacts
+experiments/**/preview/
+experiments/**/data/processed/eta-v2-pilot.json
+
+# Local agent handoff packages are not part of the public portfolio
+handoff/
+docs/HANDOFF-INTEGRATION-*.md
+docs/STATUS-*.md
+docs/KICKOFF-*.md
+docs/TEMPLATE-REGIONAL-DATA-ACCEPTANCE.md
+regional-data-delivery/HANDOFF.md

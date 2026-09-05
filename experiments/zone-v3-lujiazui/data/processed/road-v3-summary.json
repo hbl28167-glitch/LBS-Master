@@ -1,0 +1,43 @@
+{
+  "bbox_wgs": {
+    "west": 121.475,
+    "south": 31.215,
+    "east": 121.535,
+    "north": 31.26
+  },
+  "v2": {
+    "roads": 1347,
+    "classes": [
+      "primary",
+      "primary_link",
+      "secondary",
+      "secondary_link",
+      "tertiary",
+      "tertiary_link",
+      "trunk",
+      "trunk_link"
+    ]
+  },
+  "v3": {
+    "roads": 4102,
+    "by_grade": {
+      "R4": 417,
+      "R5": 634,
+      "R3": 599,
+      "R1": 63,
+      "R2": 333,
+      "R6": 2056
+    },
+    "local_roads": 2690,
+    "oneway_roads": 1480,
+    "bridges": 55,
+    "tunnels": 105,
+    "observed_speed_roads": 81,
+    "synthetic_speed_roads": 4021,
+    "nodes": 18188,
+    "directed_edges": 32175,
+    "weak_components": 11,
+    "giant_component_rate": 0.995
+  },
+  "note": "Topology is OSM-derived. Missing speed and lane impedance is Synthetic by road grade."
+}

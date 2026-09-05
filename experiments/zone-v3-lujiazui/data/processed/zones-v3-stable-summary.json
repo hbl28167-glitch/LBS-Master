@@ -1,0 +1,27 @@
+{
+  "parcels": 854,
+  "waterfront_review_parcels": 7,
+  "buildings": 6184,
+  "assigned_buildings": 6184,
+  "assignment_rate": 1,
+  "by_side": {
+    "puxi": {
+      "buildings": 3224,
+      "assigned": 3224,
+      "assignment_rate": 1
+    },
+    "pudong": {
+      "buildings": 2960,
+      "assigned": 2960,
+      "assignment_rate": 1
+    }
+  },
+  "by_type": {
+    "residential": 587,
+    "industrial": 29,
+    "mixed": 100,
+    "commercial": 109,
+    "public_service": 17,
+    "office": 12
+  }
+}

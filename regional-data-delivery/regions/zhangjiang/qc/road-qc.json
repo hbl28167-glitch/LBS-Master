@@ -1,0 +1,1 @@
+{"region_id":"zhangjiang","status":"pass","feature_count":2171,"grade_counts":{"R4":605,"R2":512,"R1":595,"R3":459},"oneway_count":0,"bridge_count":0,"tunnel_count":0,"giant_component_ratio":0.989,"synthetic_speed_ratio":1,"nodes":9406,"directed_edges":20008,"errors":[],"warnings":[]}

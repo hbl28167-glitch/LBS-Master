@@ -7,7 +7,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node --test tests/portable-paths.test.js tests/gcj.test.js",
+    "test": "node --test tests/portable-paths.test.js tests/gcj.test.js tests/region-catalog.test.js tests/regional-publish.test.js",
     "verify:paths": "node tests/portable-paths.test.js",
     "build:anchors": "node scripts/build-anchors.js",
     "build:grids": "node scripts/build-grids.js",
@@ -27,6 +27,7 @@
     "verify:alignment": "node scripts/verify-alignment.js",
     "build:manifest": "node scripts/build-manifest.js",
     "copy:public-data": "node scripts/copy-public-data.js",
+    "copy:regional-data": "node scripts/copy-regional-delivery.js",
     "build": "node scripts/build-all.js",
     "serve": "node scripts/serve-static.js public 4173",
     "serve:npx": "npx --yes serve public -p 4173"

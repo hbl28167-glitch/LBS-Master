@@ -1,0 +1,1 @@
+{"region_id":"xujiahui_caohejing","status":"conditional_pass","feature_count":3810,"grade_counts":{"R4":517,"R1":198,"R3":450,"R5":720,"R2":521,"R6":1404},"oneway_count":1602,"bridge_count":254,"tunnel_count":42,"giant_component_ratio":0.9519,"synthetic_speed_ratio":0.928,"nodes":14435,"directed_edges":24947,"errors":[],"warnings":["giant_component_ratio below 0.97 target"]}

@@ -1,0 +1,15 @@
+{
+  "generated_at": "2026-08-30T05:01:51.889Z",
+  "regions": {
+    "qiantan_xuhui_riverside": "pass",
+    "xujiahui_caohejing": "conditional_pass",
+    "hongqiao_hub": "pass",
+    "zhangjiang": "pass",
+    "lingang": "pass"
+  },
+  "error_count": 0,
+  "warning_count": 0,
+  "errors": [],
+  "warnings": [],
+  "overall": "CONDITIONAL"
+}

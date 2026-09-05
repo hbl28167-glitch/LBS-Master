@@ -1,0 +1,14 @@
+{
+  "roads": 1347,
+  "blocks": 256,
+  "buildings": 6184,
+  "assigned_buildings": 5009,
+  "assignment_rate": 0.81,
+  "old_zones": 18,
+  "bbox_wgs": {
+    "west": 121.475,
+    "south": 31.215,
+    "east": 121.535,
+    "north": 31.26
+  }
+}

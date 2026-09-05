@@ -3,7 +3,7 @@
 
   const DEFAULT = {
     persona: "analyst",
-    region: { city: "shanghai", district: null },
+    region: { city: "shanghai", district: null, id: "qiantan_xuhui_riverside" },
     // 05.2 canonical analysis pair
     analysis_scene: { time_scenario: "wd_pm_peak", weather: "clear" },
     time_of_day: "wd_pm_peak",
@@ -19,11 +19,9 @@
     selected_site_id: null,
     layer_set: [
       "basemap",
-      "water",
       "roads",
       "road_cong",
       "zones",
-      "heat",
       "overlay"
     ],
     snapshot_id: null,
@@ -55,11 +53,10 @@
   };
 
   const PACK_LAYERS = {
-    overview: ["basemap", "water", "roads", "road_cong", "zones", "heat", "overlay"],
-    ride: ["basemap", "water", "roads", "road_cong", "zones", "heat", "overlay"],
+    overview: ["basemap", "roads", "road_cong", "zones", "overlay"],
+    ride: ["basemap", "roads", "road_cong", "zones", "heat", "overlay"],
     fulfillment: [
       "basemap",
-      "water",
       "roads",
       "road_cong",
       "zones",
@@ -67,10 +64,9 @@
       "stores",
       "overlay"
     ],
-    o2o: ["basemap", "water", "roads", "zones", "heat", "stores", "fence", "overlay"],
+    o2o: ["basemap", "roads", "zones", "heat", "stores", "fence", "overlay"],
     energy: [
       "basemap",
-      "water",
       "roads",
       "road_cong",
       "zones",
@@ -78,7 +74,7 @@
       "chargers",
       "overlay"
     ],
-    governance: ["basemap", "water", "roads", "zones", "quality", "overlay"]
+    governance: ["basemap", "roads", "zones", "quality", "overlay"]
   };
 
   const listeners = new Set();
@@ -109,7 +105,11 @@
     };
     return {
       persona: s.persona,
-      region: { city: s.region.city, district: s.region.district },
+      region: {
+        city: s.region.city,
+        district: s.region.district,
+        id: s.region.id || "lujiazui_bund"
+      },
       analysis_scene: {
         time_scenario: as.time_scenario,
         weather: as.weather
@@ -217,7 +217,6 @@
       prevSet.indexOf("roads") >= 0 || prevSet.indexOf("road_cong") >= 0;
     const layer_set = packDef.filter(function (k) {
       if (k === "basemap") return prevSet.indexOf("basemap") >= 0;
-      if (k === "water") return prevSet.indexOf("water") >= 0;
       if (k === "zones") return prevSet.indexOf("zones") >= 0;
       if (k === "heat") return prevSet.indexOf("heat") >= 0;
       if (k === "overlay") return prevSet.indexOf("overlay") >= 0;
@@ -234,7 +233,12 @@
       siting_open: false,
       siting_zone_id: null,
       selected_site_id: p === "energy" ? state.selected_site_id : null,
-      side_panel: p === "energy" ? "energy" : "list",
+      side_panel:
+        state.region && state.region.id && state.region.id !== "lujiazui_bund"
+          ? "regional"
+          : p === "energy"
+            ? "energy"
+            : "list",
       metric_key:
         p === "ride"
           ? "ride_gap"

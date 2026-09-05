@@ -1,0 +1,13 @@
+{
+  "version": "2026-08-30",
+  "coordinate_system": "GCJ-02_display",
+  "default_region_id": "lujiazui_bund",
+  "regions": [
+    {"region_id":"lujiazui_bund","name":"陆家嘴—外滩","short_name":"陆家嘴","center":[31.2375,121.505],"zoom":14,"status":"ready","status_label":"深度案例已接入","primary_case":"能源站网覆盖异常","resident_role":"滨江住宅与跨江需求","data_profile":"road_v3_zone_v3_eta_v2"},
+    {"region_id":"qiantan_xuhui_riverside","name":"前滩—徐汇滨江","short_name":"前滩双岸","center":[31.17,121.485],"zoom":13,"status":"ready","status_label":"高细节区域已接入","primary_case":"跨江多业务协同","resident_role":"两岸住宅需求与服务节点","data_profile":"road_v3_zone_v3_real_buildings"},
+    {"region_id":"xujiahui_caohejing","name":"徐家汇—漕河泾","short_name":"徐汇漕河泾","center":[31.18,121.428],"zoom":13,"status":"conditional","status_label":"已接入 · 路网待修","primary_case":"到店与即时零售","resident_role":"成熟住宅客群与商业服务圈","data_profile":"real_buildings_road_conditional"},
+    {"region_id":"hongqiao_hub","name":"虹桥枢纽及周边","short_name":"虹桥枢纽","center":[31.195,121.33],"zoom":13,"status":"conditional","status_label":"已接入 · 建筑待补","primary_case":"枢纽出行接驳","resident_role":"周边住宅、酒店与员工通勤","data_profile":"road_zone_entities_no_real_buildings"},
+    {"region_id":"zhangjiang","name":"张江科学城","short_name":"张江","center":[31.215,121.605],"zoom":13,"status":"conditional","status_label":"已接入 · 建筑待补","primary_case":"通勤与能源补给","resident_role":"园区办公与人才住宅","data_profile":"road_zone_entities_no_real_buildings"},
+    {"region_id":"lingang","name":"临港新城","short_name":"临港","center":[30.91,121.925],"zoom":12,"status":"conditional","status_label":"已接入 · 建筑待补","primary_case":"履约时效与能源","resident_role":"新城住宅与产业服务","data_profile":"road_zone_entities_no_real_buildings"}
+  ]
+}
